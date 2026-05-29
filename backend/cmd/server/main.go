@@ -78,7 +78,7 @@ func main() {
 	healthH := handlers.New(db, &redisPinger{client: rdb})
 	authH := handlers.NewAuthHandler(authSvc, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.IsProduction())
 	profileH := handlers.NewProfileHandler(profileSvc)
-	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc)
+	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc)
 	roadmapH := handlers.NewRoadmapHandler(aiSvc, roadmapRepo, goalsRepo)
 	recsH := handlers.NewRecommendationsHandler(aiSvc)
 	analyzerH := handlers.NewAnalyzerHandler(aiSvc, analysesRepo)
@@ -127,10 +127,12 @@ func main() {
 	protected.Put("/profile/password", authH.ChangePassword)
 	protected.Delete("/profile", profileH.Delete)
 
+	protected.Get("/accounts", accountsH.ListAccounts)
 	protected.Post("/accounts/connect", accountsH.Connect)
 	protected.Delete("/accounts/:platform", accountsH.Disconnect)
 	protected.Post("/accounts/sync", accountsH.Sync)
 	protected.Get("/stats", accountsH.GetStats)
+	protected.Get("/ai/test", accountsH.TestAI)
 
 	protected.Get("/goals", roadmapH.GetGoals)
 	protected.Put("/goals", roadmapH.UpsertGoals)

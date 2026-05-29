@@ -36,6 +36,8 @@ func mapServiceErr(c *fiber.Ctx, err error) error {
 		return errResponse(c, fiber.StatusConflict, err.Error())
 	case errors.Is(err, services.ErrBadRequest):
 		return errResponse(c, fiber.StatusBadRequest, err.Error())
+	case errors.Is(err, services.ErrExternal):
+		return errResponse(c, fiber.StatusBadGateway, err.Error())
 	default:
 		return errResponse(c, fiber.StatusInternalServerError, "internal server error")
 	}

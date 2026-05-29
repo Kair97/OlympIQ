@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { updateProfile, deleteProfile, connectAccount, disconnectAccount, syncAccounts } from '../api/profile'
+import {
+  updateProfile, deleteProfile, connectAccount,
+  disconnectAccount, syncAccounts, getAccounts, testAI,
+} from '../api/profile'
 import { changePassword } from '../api/auth'
 import type { PlatformAccount } from '../types'
-import { getStats } from '../api/profile'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,7 +18,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Flash({ msg, type }: { msg: string; type: 'ok' | 'err' }) {
   return (
-    <div style={{ background: type === 'ok' ? 'var(--ok)' : 'var(--err)', color: '#fff', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', marginBottom: '0.75rem' }}>
+    <div style={{
+      background: type === 'ok' ? 'var(--ok)' : 'var(--err)',
+      color: '#fff', borderRadius: 'var(--radius-sm)',
+      padding: '0.5rem 0.75rem', fontSize: '0.8125rem', marginBottom: '0.75rem',
+    }}>
       {msg}
     </div>
   )
@@ -28,15 +34,17 @@ export default function Profile() {
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [aiStatus, setAiStatus] = useState<'idle' | 'testing' | 'ok' | 'err'>('idle')
+  const [aiMsg, setAiMsg] = useState('')
 
   const [profileForm, setProfileForm] = useState({ email: user?.email ?? '', username: user?.username ?? '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [connectForm, setConnectForm] = useState<Record<string, string>>({ codeforces: '', leetcode: '' })
 
   useEffect(() => {
-    getStats().then(() => {}).catch(() => {})
-    // Load connected accounts from stats
-    import('../api/profile').then(({ getStats: _ }) => {})
+    getAccounts()
+      .then(data => setAccounts(data ?? []))
+      .catch(() => {})
   }, [])
 
   function notify(msg: string, type: 'ok' | 'err' = 'ok') {
@@ -71,8 +79,11 @@ export default function Profile() {
       const acc = await connectAccount(platform, handle.trim())
       setAccounts(prev => [...prev.filter(a => a.platform !== platform), acc])
       setConnectForm(f => ({ ...f, [platform]: '' }))
-      notify(`${platform} connected`)
-    } catch { notify(`Failed to connect ${platform}`, 'err') }
+      notify(`${platform} connected — click Sync to load stats`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : `Failed to connect ${platform}`
+      notify(msg, 'err')
+    }
   }
 
   async function handleDisconnect(platform: string) {
@@ -86,9 +97,15 @@ export default function Profile() {
 
   async function handleSync() {
     setSyncing(true)
-    try { await syncAccounts(); notify('Sync complete') }
-    catch { notify('Sync failed', 'err') }
-    finally { setSyncing(false) }
+    try {
+      await syncAccounts()
+      notify('Sync complete — check Dashboard for updated stats')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Sync failed'
+      notify(msg, 'err')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   async function handleDeleteAccount() {
@@ -98,6 +115,19 @@ export default function Profile() {
       setUser(null)
       window.location.href = '/login'
     } catch { notify('Failed to delete account', 'err') }
+  }
+
+  async function handleTestAI() {
+    setAiStatus('testing')
+    setAiMsg('')
+    try {
+      const result = await testAI()
+      setAiStatus('ok')
+      setAiMsg(result.response)
+    } catch (e: unknown) {
+      setAiStatus('err')
+      setAiMsg(e instanceof Error ? e.message : 'Gemini API error')
+    }
   }
 
   const platforms = ['codeforces', 'leetcode'] as const
@@ -130,6 +160,33 @@ export default function Profile() {
           </div>
           <button className="oq-btn-primary" type="submit" style={{ alignSelf: 'flex-start' }}>Save changes</button>
         </form>
+      </Section>
+
+      {/* AI Test */}
+      <Section title="AI Status (Gemini)">
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-faint)', marginBottom: '1rem' }}>
+          Test whether your Gemini API key is working correctly.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={handleTestAI} disabled={aiStatus === 'testing'} className="oq-btn-primary">
+            {aiStatus === 'testing' ? 'Testing…' : '✦ Test AI'}
+          </button>
+          {aiStatus === 'ok' && (
+            <span style={{ color: 'var(--ok)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span className="status-dot ok" /> Working — Gemini replied: &ldquo;{aiMsg}&rdquo;
+            </span>
+          )}
+          {aiStatus === 'err' && (
+            <span style={{ color: 'var(--err)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span className="status-dot err" /> Failed — {aiMsg}
+            </span>
+          )}
+        </div>
+        {aiStatus === 'err' && (
+          <p style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-faint)' }}>
+            Check that <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-sunken)', padding: '1px 4px', borderRadius: 4 }}>GEMINI_API_KEY</code> is set correctly in your <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-sunken)', padding: '1px 4px', borderRadius: 4 }}>.env</code> file, then restart with <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-sunken)', padding: '1px 4px', borderRadius: 4 }}>docker-compose down &amp;&amp; docker-compose up</code>.
+          </p>
+        )}
       </Section>
 
       {/* Password */}
@@ -166,13 +223,22 @@ export default function Profile() {
               <span style={{ width: 100, fontWeight: 500, fontSize: '0.875rem' }}>{label}</span>
               {connected ? (
                 <>
-                  <span className="mono" style={{ flex: 1, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{connected.handle}</span>
+                  <span className="mono" style={{ flex: 1, color: 'var(--ok)', fontSize: '0.875rem' }}>✓ {connected.handle}</span>
                   <button onClick={() => handleDisconnect(platform)} className="oq-btn-danger" style={{ fontSize: '0.8125rem', padding: '0.25rem 0.75rem' }}>Disconnect</button>
                 </>
               ) : (
                 <>
-                  <input className="oq-input" type="text" value={connectForm[platform]} onChange={e => setConnectForm(f => ({ ...f, [platform]: e.target.value }))} placeholder={`Your ${label} handle`} style={{ flex: 1 }} />
-                  <button onClick={() => handleConnect(platform)} className="oq-btn-primary" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.875rem', flexShrink: 0 }}>Connect</button>
+                  <input
+                    className="oq-input"
+                    type="text"
+                    value={connectForm[platform]}
+                    onChange={e => setConnectForm(f => ({ ...f, [platform]: e.target.value }))}
+                    placeholder={`Your ${label} handle`}
+                    style={{ flex: 1 }}
+                  />
+                  <button onClick={() => handleConnect(platform)} className="oq-btn-primary" style={{ fontSize: '0.8125rem', padding: '0.375rem 0.875rem', flexShrink: 0 }}>
+                    Connect
+                  </button>
                 </>
               )}
             </div>

@@ -155,6 +155,11 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 	return sc, nil
 }
 
+// TestConnection pings the Gemini API with a trivial prompt to verify the key works.
+func (s *AIService) TestConnection(ctx context.Context) (string, error) {
+	return s.callGemini(ctx, "You are a helpful assistant.", "Reply with exactly: OlympIQ AI is working!")
+}
+
 // GenerateRoadmap calls Gemini and returns the JSON roadmap string.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
 	userMsg := buildRoadmapUserMessage(sc, mode)
