@@ -266,9 +266,27 @@ func loadRSAKeys(privB64, pubB64 string) (*rsa.PrivateKey, *rsa.PublicKey, error
 	if block == nil {
 		return nil, nil, errors.New("invalid private key PEM")
 	}
-	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, nil, fmt.Errorf("parse private key: %w", err)
+
+	// Support both PKCS#1 (openssl genrsa legacy) and PKCS#8 (openssl 3.x default).
+	var priv *rsa.PrivateKey
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		priv, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("parse PKCS1 private key: %w", err)
+		}
+	case "PRIVATE KEY":
+		key, pkcs8Err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if pkcs8Err != nil {
+			return nil, nil, fmt.Errorf("parse PKCS8 private key: %w", pkcs8Err)
+		}
+		var ok bool
+		priv, ok = key.(*rsa.PrivateKey)
+		if !ok {
+			return nil, nil, errors.New("PKCS8 key is not RSA")
+		}
+	default:
+		return nil, nil, fmt.Errorf("unsupported private key type: %s", block.Type)
 	}
 
 	pubPEM, err := base64.StdEncoding.DecodeString(pubB64)
