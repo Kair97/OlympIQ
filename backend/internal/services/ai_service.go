@@ -16,32 +16,33 @@ import (
 	"olympiq/backend/internal/repository"
 )
 
-const anthropicAPI = "https://api.anthropic.com/v1/messages"
+// geminiBaseURL is the Google Generative Language REST endpoint.
+const geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 // StudentContext aggregates all user data needed for AI prompts.
 type StudentContext struct {
-	CFHandle      string
-	CFRating      int
-	CFRank        string
-	CFMaxRating   int
-	CFTagFreq     map[string]int
+	CFHandle       string
+	CFRating       int
+	CFRank         string
+	CFMaxRating    int
+	CFTagFreq      map[string]int
 	CFRecentRating []models.CodeforcesRatingChange
-	CFSolvedKeys  []string
+	CFSolvedKeys   []string
 
-	LCHandle       string
-	LCRanking      int
-	LCTotalSolved  int
-	LCEasy         int
-	LCMedium       int
-	LCHard         int
+	LCHandle        string
+	LCRanking       int
+	LCTotalSolved   int
+	LCEasy          int
+	LCMedium        int
+	LCHard          int
 	LCContestRating float64
-	LCWeakTopics   []string
-	LCSolvedSlugs  []string
+	LCWeakTopics    []string
+	LCSolvedSlugs   []string
 
 	Goals *models.UserGoal
 }
 
-// AIService handles Claude API calls for roadmap, razbor, and recommendations.
+// AIService handles Gemini API calls for roadmap, razbor, and recommendations.
 type AIService struct {
 	apiKey    string
 	model     string
@@ -54,7 +55,7 @@ type AIService struct {
 	lc        *LeetCodeService
 }
 
-// NewAIService constructs an AIService.
+// NewAIService constructs an AIService backed by Google Gemini.
 func NewAIService(
 	apiKey, model string,
 	platforms repository.PlatformRepository,
@@ -154,45 +155,50 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 	return sc, nil
 }
 
-// GenerateRoadmap calls Claude and returns the JSON roadmap string.
+// GenerateRoadmap calls Gemini and returns the JSON roadmap string.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
 	userMsg := buildRoadmapUserMessage(sc, mode)
-	return s.callClaude(ctx, roadmapSystemPrompt, userMsg)
+	return s.callGemini(ctx, roadmapSystemPrompt, userMsg)
 }
 
-// AnalyzeProblem calls Claude and returns the JSON razbor string.
+// AnalyzeProblem calls Gemini and returns the JSON razbor string.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
 	userMsg := fmt.Sprintf("Analyze this competitive programming problem:\n\nURL: %s\n\nProvide a complete educational razbor. Do not write any working solution code.", sanitize(problemURL))
-	return s.callClaude(ctx, razborSystemPrompt, userMsg)
+	return s.callGemini(ctx, razborSystemPrompt, userMsg)
 }
 
-// GenerateRecommendations calls Claude and returns a JSON array of problems.
+// GenerateRecommendations calls Gemini and returns a JSON array of problems.
 func (s *AIService) GenerateRecommendations(ctx context.Context, sc *StudentContext, topic, mode string) (string, error) {
 	userMsg := buildRecommendationsUserMessage(sc, topic, mode)
-	return s.callClaude(ctx, recommendationsSystemPrompt, userMsg)
+	return s.callGemini(ctx, recommendationsSystemPrompt, userMsg)
 }
 
-func (s *AIService) callClaude(ctx context.Context, systemPrompt, userMsg string) (string, error) {
+// callGemini sends a request to the Gemini generateContent REST endpoint.
+func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string) (string, error) {
 	reqBody := map[string]interface{}{
-		"model":      s.model,
-		"max_tokens": 4096,
-		"system":     systemPrompt,
-		"messages": []map[string]string{
-			{"role": "user", "content": userMsg},
+		"systemInstruction": map[string]interface{}{
+			"parts": []map[string]string{{"text": systemPrompt}},
+		},
+		"contents": []map[string]interface{}{
+			{"role": "user", "parts": []map[string]string{{"text": userMsg}}},
+		},
+		"generationConfig": map[string]interface{}{
+			"maxOutputTokens": 4096,
+			"temperature":     0.2,
 		},
 	}
+
 	b, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPI, bytes.NewReader(b))
+	url := fmt.Sprintf("%s/%s:generateContent?key=%s", geminiBaseURL, s.model, s.apiKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", s.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := s.http.Do(req)
 	if err != nil {
@@ -205,11 +211,15 @@ func (s *AIService) callClaude(ctx context.Context, systemPrompt, userMsg string
 		return "", err
 	}
 
+	// Gemini response shape
 	var result struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
@@ -220,12 +230,10 @@ func (s *AIService) callClaude(ctx context.Context, systemPrompt, userMsg string
 	if result.Error != nil {
 		return "", fmt.Errorf("%w: %s", ErrExternal, result.Error.Message)
 	}
-	for _, c := range result.Content {
-		if c.Type == "text" {
-			return c.Text, nil
-		}
+	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
+		return result.Candidates[0].Content.Parts[0].Text, nil
 	}
-	return "", fmt.Errorf("%w: empty Claude response", ErrExternal)
+	return "", fmt.Errorf("%w: empty Gemini response", ErrExternal)
 }
 
 func sanitize(s string) string {
@@ -284,7 +292,6 @@ func orNA(s string) string {
 	return s
 }
 
-// Prompt constants kept at package level to keep function bodies short.
 const roadmapSystemPrompt = `You are OlympIQ Coach, an expert competitive programming mentor with deep knowledge of Codeforces, LeetCode, and competitive programming pedagogy.
 
 Your task is to generate a highly personalized study roadmap based on the student's real statistics. You must analyze what they have already solved, identify their genuine weak areas, and prescribe specific next steps.
