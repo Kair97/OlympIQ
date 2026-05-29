@@ -35,22 +35,12 @@ type ConnectInput struct {
 	Handle   string `json:"handle"   validate:"required,min=1,max=60"`
 }
 
-// Connect validates the handle with the external API then saves it.
+// Connect saves the handle immediately — no external API call at connect time.
+// Handle validity is confirmed on the first sync.
 func (s *AccountsService) Connect(ctx context.Context, userID uuid.UUID, in ConnectInput) (*models.PlatformAccount, error) {
 	existing, err := s.platforms.FindByUserIDAndPlatform(ctx, userID, in.Platform)
 	if err == nil && existing != nil {
 		return nil, fmt.Errorf("%w: %s already connected", ErrConflict, in.Platform)
-	}
-
-	switch in.Platform {
-	case "codeforces":
-		if _, err := s.cf.GetUserInfo(ctx, in.Handle); err != nil {
-			return nil, fmt.Errorf("%w: codeforces handle not found", ErrBadRequest)
-		}
-	case "leetcode":
-		if _, err := s.lc.GetProfile(ctx, in.Handle); err != nil {
-			return nil, fmt.Errorf("%w: leetcode handle not found", ErrBadRequest)
-		}
 	}
 
 	acc := &models.PlatformAccount{

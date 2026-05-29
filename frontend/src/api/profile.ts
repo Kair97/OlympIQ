@@ -5,6 +5,7 @@ export const getProfile = () => get<User>('/profile')
 export const updateProfile = (data: { email?: string; username?: string }) => put<User>('/profile', data)
 export const deleteProfile = () => del<null>('/profile')
 
+export const getAccounts = () => get<PlatformAccount[]>('/accounts')
 export const connectAccount = (platform: string, handle: string) =>
   post<PlatformAccount>('/accounts/connect', { platform, handle })
 export const disconnectAccount = (platform: string) => del<null>(`/accounts/${platform}`)
@@ -13,3 +14,5 @@ export const getStats = () => get<UserStats[]>('/stats')
 
 export const getGoals = () => get<UserGoal | null>('/goals')
 export const upsertGoals = (data: Partial<UserGoal>) => put<UserGoal>('/goals', data)
+
+export const testAI = () => get<{ status: string; response: string }>('/ai/test')
