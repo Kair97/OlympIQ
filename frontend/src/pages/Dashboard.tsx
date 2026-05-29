@@ -130,8 +130,6 @@ function Heatmap({ calendar }: { calendar: Record<string, number> }) {
   const cells: number[] = []
   for (let i = 6 * 7 - 1; i >= 0; i--) {
     const d = new Date(now - i * 86400000)
-    const key = String(Math.floor(d.getTime() / 1000))
-    // LC calendar uses Unix timestamps as keys
     const found = Object.entries(calendar).find(([k]) => {
       const diff = Math.abs(parseInt(k) - d.getTime() / 1000)
       return diff < 43200 // within 12 hours
