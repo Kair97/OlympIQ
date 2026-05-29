@@ -188,8 +188,9 @@ func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string
 			{"role": "user", "parts": []map[string]string{{"text": userMsg}}},
 		},
 		"generationConfig": map[string]interface{}{
-			"maxOutputTokens": 4096,
-			"temperature":     0.2,
+			"maxOutputTokens":  4096,
+			"temperature":      0.2,
+			"responseMimeType": "application/json",
 		},
 	}
 
@@ -236,9 +237,27 @@ func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string
 		return "", fmt.Errorf("%w: %s", ErrExternal, result.Error.Message)
 	}
 	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
-		return result.Candidates[0].Content.Parts[0].Text, nil
+		return stripMarkdownFences(result.Candidates[0].Content.Parts[0].Text), nil
 	}
 	return "", fmt.Errorf("%w: empty Gemini response", ErrExternal)
+}
+
+// stripMarkdownFences removes ```json ... ``` wrapping that Gemini sometimes adds
+// despite being told to return raw JSON.
+func stripMarkdownFences(s string) string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	// Drop the opening fence line (```json or ```)
+	if idx := strings.Index(s, "\n"); idx >= 0 {
+		s = s[idx+1:]
+	}
+	// Drop the closing fence
+	if idx := strings.LastIndex(s, "```"); idx >= 0 {
+		s = s[:idx]
+	}
+	return strings.TrimSpace(s)
 }
 
 func sanitize(s string) string {
