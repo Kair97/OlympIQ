@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -70,6 +71,9 @@ func (h *RoadmapHandler) GetLatest(c *fiber.Ctx) error {
 		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 	rm, err := h.roadmaps.LatestByUserID(c.Context(), uid)
+	if errors.Is(err, repository.ErrNotFound) {
+		return ok(c, nil) // No roadmap generated yet — return null, not an error.
+	}
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
