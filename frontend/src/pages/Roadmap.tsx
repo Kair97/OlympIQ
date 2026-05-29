@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { generateRoadmap, getRoadmap } from '../api/roadmap'
-import { getGoals, upsertGoals } from '../api/profile'
+import { getGoals } from '../api/profile'
 import type { AnyRoadmap, WeeklyRoadmap, TopicRoadmap, InterviewRoadmap, RoadmapProblem, UserGoal } from '../types'
 
 type Mode = 'weekly' | 'topic' | 'interview'
