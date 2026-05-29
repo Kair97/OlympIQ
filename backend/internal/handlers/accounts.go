@@ -89,6 +89,19 @@ func (h *AccountsHandler) GetStats(c *fiber.Ctx) error {
 	return ok(c, stats)
 }
 
+// GetDashboard handles GET /dashboard — returns rich parsed stats for the Dashboard page.
+func (h *AccountsHandler) GetDashboard(c *fiber.Ctx) error {
+	uid, err := userUUID(c)
+	if err != nil {
+		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+	dash, err := h.stats.GetDashboard(c.Context(), uid)
+	if err != nil {
+		return mapServiceErr(c, err)
+	}
+	return ok(c, dash)
+}
+
 // TestAI handles GET /ai/test — pings the Gemini API and returns the result.
 func (h *AccountsHandler) TestAI(c *fiber.Ctx) error {
 	result, err := h.ai.TestConnection(c.Context())
