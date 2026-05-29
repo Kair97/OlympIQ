@@ -127,6 +127,7 @@ func main() {
 	protected.Put("/profile/password", authH.ChangePassword)
 	protected.Delete("/profile", profileH.Delete)
 
+	protected.Get("/dashboard", accountsH.GetDashboard)
 	protected.Get("/accounts", accountsH.ListAccounts)
 	protected.Post("/accounts/connect", accountsH.Connect)
 	protected.Delete("/accounts/:platform", accountsH.Disconnect)
