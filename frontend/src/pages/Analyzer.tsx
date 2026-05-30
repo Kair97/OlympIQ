@@ -109,46 +109,52 @@ function RazborPane({ model }: { model: string }) {
 
       <div className="oq-razbor-scroll">
         {/* 01 Classification */}
-        {(tab === 'all' || tab === 'solution') && (
+        {(tab === 'all' || tab === 'solution') && r.classification && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">01</span> Classification</div>
             <div className="oq-classify">
-              <div className="oq-classify-row">
-                <span className="oq-rs-key">type</span>
-                <span className="oq-pill oq-pill-accent">{r.classification.type}</span>
-                {r.classification.subtype && (
-                  <span className="oq-pill" style={{ marginLeft: 4 }}>{r.classification.subtype}</span>
-                )}
-              </div>
-              <div className="oq-classify-row">
-                <span className="oq-rs-key">difficulty</span>
-                <span className="oq-mono">{r.classification.difficulty_label}</span>
-              </div>
-              <div className="oq-classify-row">
-                <span className="oq-rs-key">confidence</span>
-                <div className="oq-confidence">
-                  <div className="oq-confidence-fill" style={{ width: `${r.classification.confidence * 100}%` }} />
+              {r.classification.type && (
+                <div className="oq-classify-row">
+                  <span className="oq-rs-key">type</span>
+                  <span className="oq-pill oq-pill-accent">{r.classification.type}</span>
+                  {r.classification.subtype && (
+                    <span className="oq-pill" style={{ marginLeft: 4 }}>{r.classification.subtype}</span>
+                  )}
                 </div>
-                <span className="oq-mono" style={{ fontSize: 11 }}>
-                  {Math.round(r.classification.confidence * 100)}%
-                </span>
-              </div>
+              )}
+              {r.classification.difficulty_label && (
+                <div className="oq-classify-row">
+                  <span className="oq-rs-key">difficulty</span>
+                  <span className="oq-mono">{r.classification.difficulty_label}</span>
+                </div>
+              )}
+              {r.classification.confidence != null && (
+                <div className="oq-classify-row">
+                  <span className="oq-rs-key">confidence</span>
+                  <div className="oq-confidence">
+                    <div className="oq-confidence-fill" style={{ width: `${(r.classification.confidence ?? 0) * 100}%` }} />
+                  </div>
+                  <span className="oq-mono" style={{ fontSize: 11 }}>
+                    {Math.round((r.classification.confidence ?? 0) * 100)}%
+                  </span>
+                </div>
+              )}
             </div>
           </section>
         )}
 
         {/* 02 Key observations */}
-        {(tab === 'all' || tab === 'solution') && r.key_observations.length > 0 && (
+        {(tab === 'all' || tab === 'solution') && (r.key_observations?.length ?? 0) > 0 && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">02</span> Key observations</div>
             <ol className="oq-rs-list">
-              {r.key_observations.map((obs, i) => <li key={i}>{obs}</li>)}
+              {(r.key_observations ?? []).map((obs, i) => <li key={i}>{obs}</li>)}
             </ol>
           </section>
         )}
 
         {/* 03 Hint ladder */}
-        {(tab === 'all' || tab === 'hints') && r.algorithm_approach.hints.length > 0 && (
+        {(tab === 'all' || tab === 'hints') && (r.algorithm_approach?.hints?.length ?? 0) > 0 && (
           <section className="oq-rs">
             <div className="oq-rs-head">
               <span className="oq-rs-marker">03</span> Hint ladder
@@ -157,7 +163,7 @@ function RazborPane({ model }: { model: string }) {
               </span>
             </div>
             <div className="oq-hints">
-              {r.algorithm_approach.hints.map((h, i) => {
+              {(r.algorithm_approach?.hints ?? []).map((h, i) => {
                 const open = i < revealedHints
                 return (
                   <div key={i} className={cx('oq-hint', open && 'is-open')}>
@@ -179,7 +185,7 @@ function RazborPane({ model }: { model: string }) {
         )}
 
         {/* 04 Approach summary */}
-        {(tab === 'all' || tab === 'solution') && r.algorithm_approach.summary && (
+        {(tab === 'all' || tab === 'solution') && r.algorithm_approach?.summary && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">04</span> Approach</div>
             <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>
@@ -189,11 +195,11 @@ function RazborPane({ model }: { model: string }) {
         )}
 
         {/* 05 Step-by-step */}
-        {(tab === 'all' || tab === 'solution') && r.solution_steps.length > 0 && (
+        {(tab === 'all' || tab === 'solution') && (r.solution_steps?.length ?? 0) > 0 && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">05</span> Algorithm — step by step</div>
             <ol className="oq-steps">
-              {r.solution_steps.map((s, i) => (
+              {(r.solution_steps ?? []).map((s, i) => (
                 <li key={i}>
                   <span className="oq-step-num oq-mono">{String(i + 1).padStart(2, '0')}</span>
                   <span>{s}</span>
@@ -204,17 +210,17 @@ function RazborPane({ model }: { model: string }) {
         )}
 
         {/* 06 Complexity */}
-        {(tab === 'all' || tab === 'solution') && (
+        {(tab === 'all' || tab === 'solution') && r.complexity && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">06</span> Complexity</div>
             <div className="oq-complexity">
               <div className="oq-cx">
                 <div className="oq-cx-lbl">time</div>
-                <div className="oq-cx-val oq-mono">{r.complexity.time}</div>
+                <div className="oq-cx-val oq-mono">{r.complexity.time ?? '—'}</div>
               </div>
               <div className="oq-cx">
                 <div className="oq-cx-lbl">space</div>
-                <div className="oq-cx-val oq-mono">{r.complexity.space}</div>
+                <div className="oq-cx-val oq-mono">{r.complexity.space ?? '—'}</div>
               </div>
               {r.complexity.note && (
                 <div className="oq-cx oq-cx-note">{r.complexity.note}</div>
@@ -224,28 +230,28 @@ function RazborPane({ model }: { model: string }) {
         )}
 
         {/* 07 Common mistakes */}
-        {(tab === 'all' || tab === 'solution') && r.common_mistakes.length > 0 && (
+        {(tab === 'all' || tab === 'solution') && (r.common_mistakes?.length ?? 0) > 0 && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">07</span> Common mistakes</div>
             <ul className="oq-rs-list">
-              {r.common_mistakes.map((m, i) => <li key={i}>{m}</li>)}
+              {(r.common_mistakes ?? []).map((m, i) => <li key={i}>{m}</li>)}
             </ul>
           </section>
         )}
 
         {/* 08 Similar problems */}
-        {(tab === 'all' || tab === 'solution') && r.similar_problems.length > 0 && (
+        {(tab === 'all' || tab === 'solution') && (r.similar_problems?.length ?? 0) > 0 && (
           <section className="oq-rs">
             <div className="oq-rs-head"><span className="oq-rs-marker">08</span> Similar to practice</div>
             <ul className="oq-similar">
-              {r.similar_problems.map((s, i) => (
+              {(r.similar_problems ?? []).map((s, i) => (
                 <li key={i}>
                   <div className="oq-similar-main">
                     <div className="oq-similar-code oq-mono">{s.platform}</div>
                     <div className="oq-similar-title">{s.title}</div>
                   </div>
                   <div className="oq-similar-meta">
-                    <div className="oq-similar-tags">{s.tags.slice(0, 2).join(' · ')}</div>
+                    <div className="oq-similar-tags">{(s.tags ?? []).slice(0, 2).join(' · ')}</div>
                     {s.rating && <div className={ratingPillClass(s.rating)}>{s.rating}</div>}
                     <a href={s.url} target="_blank" rel="noopener noreferrer"
                        className="oq-btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }}>
@@ -281,14 +287,16 @@ function ProblemPane({ content, url }: { content: AnalysisContent; url: string }
           </div>
           <h2 className="oq-prob-title">{content.problem_title}</h2>
         </div>
-        <div className={ratingPillClass(null, content.classification.difficulty_label)}>
-          {content.classification.difficulty_label}
-        </div>
+        {content.classification?.difficulty_label && (
+          <div className={ratingPillClass(null, content.classification.difficulty_label)}>
+            {content.classification.difficulty_label}
+          </div>
+        )}
       </div>
 
       {/* Tags */}
       <div className="oq-tags">
-        {[content.classification.type, content.classification.subtype]
+        {[content.classification?.type, content.classification?.subtype]
           .filter(Boolean)
           .map((t, i) => (
             <a key={i} href={tagSearchURL(t!, platform)} target="_blank" rel="noopener" className="oq-tag">
@@ -318,19 +326,19 @@ function ProblemPane({ content, url }: { content: AnalysisContent; url: string }
       </div>
 
       {/* Key observations preview */}
-      {content.key_observations.length > 0 && (
+      {(content.key_observations?.length ?? 0) > 0 && (
         <div className="oq-prob-section">
           <div className="oq-section-label">key observations</div>
           <ul className="oq-constraints">
-            {content.key_observations.slice(0, 3).map((obs, i) => (
-              <li key={i}><span className="oq-mono" style={{ fontFamily: 'inherit', fontSize: 13 }}>{obs}</span></li>
+            {(content.key_observations ?? []).slice(0, 3).map((obs, i) => (
+              <li key={i}><span style={{ fontSize: 13 }}>{obs}</span></li>
             ))}
           </ul>
         </div>
       )}
 
       {/* Approach */}
-      {content.algorithm_approach.summary && (
+      {content.algorithm_approach?.summary && (
         <div className="oq-prob-section">
           <div className="oq-section-label">approach</div>
           <p className="oq-prob-text" style={{ fontSize: 13, lineHeight: 1.6 }}>

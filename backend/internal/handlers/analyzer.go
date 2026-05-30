@@ -47,6 +47,9 @@ func (h *AnalyzerHandler) Analyze(c *fiber.Ctx) error {
 		return errResponse(c, fiber.StatusInternalServerError, "failed to parse AI response")
 	}
 
+	// Ensure safe defaults so the frontend never crashes on missing fields.
+	normalizeAnalysis(parsed)
+
 	title, _ := parsed["problem_title"].(string)
 	platform, _ := parsed["platform"].(string)
 
@@ -68,6 +71,44 @@ func (h *AnalyzerHandler) Analyze(c *fiber.Ctx) error {
 		"data":    fiber.Map{"id": analysis.ID, "analysis": parsed},
 		"error":   nil,
 	})
+}
+
+// normalizeAnalysis fills in missing fields with safe zero-values so the
+// frontend can render without null-pointer crashes even if Gemini omits sections.
+func normalizeAnalysis(m map[string]interface{}) {
+	if m["classification"] == nil {
+		m["classification"] = map[string]interface{}{
+			"type": "", "subtype": "", "difficulty_label": "", "confidence": 0.0,
+		}
+	}
+	if c, ok := m["classification"].(map[string]interface{}); ok {
+		if c["type"] == nil { c["type"] = "" }
+		if c["subtype"] == nil { c["subtype"] = "" }
+		if c["difficulty_label"] == nil { c["difficulty_label"] = "" }
+		if c["confidence"] == nil { c["confidence"] = 0.0 }
+	}
+	for _, key := range []string{"key_observations", "solution_steps", "common_mistakes", "similar_problems"} {
+		if m[key] == nil {
+			m[key] = []interface{}{}
+		}
+	}
+	if m["algorithm_approach"] == nil {
+		m["algorithm_approach"] = map[string]interface{}{"summary": "", "hints": []interface{}{}}
+	}
+	if a, ok := m["algorithm_approach"].(map[string]interface{}); ok {
+		if a["summary"] == nil { a["summary"] = "" }
+		if a["hints"] == nil { a["hints"] = []interface{}{} }
+	}
+	if m["complexity"] == nil {
+		m["complexity"] = map[string]interface{}{"time": "—", "space": "—", "note": ""}
+	}
+	if cx, ok := m["complexity"].(map[string]interface{}); ok {
+		if cx["time"] == nil { cx["time"] = "—" }
+		if cx["space"] == nil { cx["space"] = "—" }
+		if cx["note"] == nil { cx["note"] = "" }
+	}
+	if m["problem_title"] == nil { m["problem_title"] = "Unknown Problem" }
+	if m["platform"] == nil { m["platform"] = "unknown" }
 }
 
 // ListAnalyses handles GET /analyses.
