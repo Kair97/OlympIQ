@@ -19,6 +19,21 @@ Students connect their Codeforces and LeetCode accounts, and the platform:
 
 ---
 
+## Vault protocol
+
+The vault at `OlympIQ_vault/` is the fastest way to load project context — prefer it over re-reading code.
+
+| Task | Read in order |
+|------|--------------|
+| Backend work | `_context.md` → `06 - Active Issues.md` → `Backend/04 - Backend.md` |
+| Frontend work | `_context.md` → `06 - Active Issues.md` → `Frontend/05 - Frontend.md` |
+| Architecture / DB | `_context.md` → `03 - Architecture.md` |
+| Full orientation | All notes `00 - Index.md` through `07 - Decisions Log.md` |
+
+After completing any work: update `01 - Project Status.md` and append a bullet to `Sessions/README.md`.
+
+---
+
 ## Design system
 
 Build the React + TypeScript + Tailwind frontend **matching the design in `OlympIQ - Atelier (standalone).html`**. Use the source files in `shared/` and `atelier.html` as your reference for component structure, CSS variable names, and visual treatment. Follow `HANDOFF.md` for the port plan.
