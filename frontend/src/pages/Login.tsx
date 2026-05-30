@@ -20,45 +20,70 @@ export default function Login() {
       setUser(user)
       navigate('/dashboard')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Login failed'
-      setError(msg)
+      setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <div className="oq-panel" style={{ width: '100%', maxWidth: 420 }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.5rem', color: 'var(--accent)' }}>OlympIQ</span>
-          <p style={{ color: 'var(--text-faint)', marginTop: '0.5rem', fontSize: '0.875rem' }}>Sign in to your account</p>
+    <div className="oq-auth-page">
+      <div className="oq-auth-card">
+        {/* Brand */}
+        <div className="oq-auth-brand">
+          <div className="oq-auth-brand-mark">◇</div>
+          <div className="oq-auth-brand-name">OlympIQ</div>
+          <div className="oq-auth-brand-sub">AI-Powered Olympiad Training</div>
         </div>
 
-        {error && (
-          <div style={{ background: 'var(--err)', color: '#fff', borderRadius: 'var(--radius-sm)', padding: '0.625rem 0.875rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            {error}
-          </div>
-        )}
+        {/* Error */}
+        {error && <div className="oq-flash-err">{error}</div>}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label className="oq-label">Email</label>
-            <input className="oq-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
-          </div>
-          <div>
-            <label className="oq-label">Password</label>
-            <input className="oq-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
-          </div>
-          <button className="oq-btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }}>
-            {loading ? 'Signing in…' : 'Sign in'}
+        {/* Form */}
+        <form className="oq-form" onSubmit={handleSubmit}>
+          <label>
+            <span className="oq-form-lbl">Email</span>
+            <input
+              className="oq-input"
+              style={{ marginTop: 5 }}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+          <label>
+            <span className="oq-form-lbl">Password</span>
+            <input
+              className="oq-input"
+              style={{ marginTop: 5 }}
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <button
+            className="oq-btn-primary"
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', justifyContent: 'center', marginTop: 4, padding: '10px 16px', fontSize: 13 }}
+          >
+            {loading ? <><span className="oq-cursor-block">▌</span> Signing in…</> : 'Sign in →'}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '1.25rem', color: 'var(--text-faint)', fontSize: '0.875rem' }}>
+        {/* Footer */}
+        <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-faint)' }}>
           No account?{' '}
-          <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Create one</Link>
-        </p>
+          <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+            Create one
+          </Link>
+        </div>
       </div>
     </div>
   )

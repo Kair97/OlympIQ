@@ -25,13 +25,25 @@ export interface LCDashboard {
   medium_solved: number
   hard_solved: number
   contest_attend: number
+  top_percentage?: number
   calendar: Record<string, number>
   skills: LCSkill[]
+}
+
+export interface Recommendation {
+  title: string
+  platform: string
+  url: string
+  rating?: number | null
+  difficulty?: string | null
+  tags: string[]
+  reason: string
 }
 
 export interface DashboardData {
   codeforces: CFDashboard | null
   leetcode: LCDashboard | null
+  recommendations?: Recommendation[]
 }
 
 export const getDashboard = () => get<DashboardData>('/dashboard')

@@ -1,22 +1,55 @@
 import { create } from 'zustand'
 import type { AnyRoadmap, UserGoal } from '../types'
 
+type Mode = 'weekly' | 'topic' | 'interview'
+
+interface NotifyPrefs {
+  daily: boolean
+  weekly: boolean
+  problems: boolean
+}
+
 interface RoadmapState {
+  // Persistent across navigation
   roadmap: AnyRoadmap | null
-  mode: string
+  mode: Mode
   goals: UserGoal | null
-  loading: boolean
-  setRoadmap: (r: AnyRoadmap | null, mode: string) => void
+  notify: NotifyPrefs
+  loaded: boolean       // true once we've fetched at least once — skip re-fetch on revisit
+
+  // Transient
+  generating: boolean
+  genError: string
+  editing: boolean
+
+  // Actions
+  setRoadmap: (r: AnyRoadmap | null, mode?: Mode) => void
+  setMode: (m: Mode) => void
   setGoals: (g: UserGoal | null) => void
-  setLoading: (v: boolean) => void
+  setNotify: (n: NotifyPrefs) => void
+  setLoaded: (v: boolean) => void
+  setGenerating: (v: boolean) => void
+  setGenError: (e: string) => void
+  setEditing: (v: boolean) => void
 }
 
 export const useRoadmapStore = create<RoadmapState>((set) => ({
   roadmap: null,
   mode: 'weekly',
   goals: null,
-  loading: false,
-  setRoadmap: (roadmap, mode) => set({ roadmap, mode }),
+  notify: { daily: false, weekly: false, problems: false },
+  loaded: false,
+  generating: false,
+  genError: '',
+  editing: false,
+
+  setRoadmap: (roadmap, mode) =>
+    set((s) => ({ roadmap, mode: mode ?? s.mode })),
+  setMode: (mode) => set({ mode }),
   setGoals: (goals) => set({ goals }),
-  setLoading: (loading) => set({ loading }),
+  setNotify: (notify) => set({ notify }),
+  setLoaded: (loaded) => set({ loaded }),
+  setGenerating: (generating) => set({ generating }),
+  setGenError: (genError) => set({ genError }),
+  setEditing: (editing) => set({ editing }),
 }))

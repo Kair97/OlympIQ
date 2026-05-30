@@ -16,3 +16,13 @@ export const getGoals = () => get<UserGoal | null>('/goals')
 export const upsertGoals = (data: Partial<UserGoal>) => put<UserGoal>('/goals', data)
 
 export const testAI = () => get<{ status: string; response: string }>('/ai/test')
+
+export interface SessionInfo {
+  id: string
+  created_at: string
+  expires_at: string
+}
+
+export const getSessions = () => get<SessionInfo[]>('/sessions')
+export const revokeSession = (id: string) => del<null>(`/sessions/${id}`)
+export const revokeAllSessions = () => del<null>('/sessions')

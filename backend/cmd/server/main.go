@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,6 +35,16 @@ func main() {
 	defer func() { _ = logger.Sync() }()
 
 	cfg := config.Load()
+
+	if !strings.HasPrefix(cfg.GeminiAPIKey, "AIza") {
+		logger.Warn("GEMINI_API_KEY is missing or invalid — AI features will not work. Get a free key at aistudio.google.com/apikey",
+			zap.String("key_prefix", func() string {
+				if len(cfg.GeminiAPIKey) >= 4 {
+					return cfg.GeminiAPIKey[:4] + "…"
+				}
+				return "(empty)"
+			}()))
+	}
 
 	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
@@ -75,7 +86,7 @@ func main() {
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
 	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
 
-	healthH := handlers.New(db, &redisPinger{client: rdb})
+	healthH := handlers.New(db, &redisPinger{client: rdb}, cfg.GeminiModel)
 	authH := handlers.NewAuthHandler(authSvc, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.IsProduction())
 	profileH := handlers.NewProfileHandler(profileSvc)
 	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc)
@@ -112,6 +123,7 @@ func main() {
 	apiLimit := middleware.RateLimit(redisCache, 60, 60*1000000000, "api")
 
 	api := app.Group("/api/v1")
+	api.Get("/config", healthH.Config) // public — no auth required
 
 	auth := api.Group("/auth")
 	auth.Use(authLimit)
@@ -126,6 +138,10 @@ func main() {
 	protected.Put("/profile", profileH.Update)
 	protected.Put("/profile/password", authH.ChangePassword)
 	protected.Delete("/profile", profileH.Delete)
+
+	protected.Get("/sessions", profileH.ListSessions)
+	protected.Delete("/sessions", profileH.RevokeAllSessions)
+	protected.Delete("/sessions/:id", profileH.RevokeSession)
 
 	protected.Get("/dashboard", accountsH.GetDashboard)
 	protected.Get("/accounts", accountsH.ListAccounts)
