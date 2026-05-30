@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore'
 import { refresh } from '../../api/auth'
 import Sidebar from './Sidebar'
 import StatusBar from './StatusBar'
+import ErrorBoundary from '../ErrorBoundary'
 
 export default function AppShell() {
   const { user, setUser, setLoading, loading } = useAuthStore()
@@ -24,8 +25,11 @@ export default function AppShell() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text-faint)' }}>
-        Loading…
+      <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: 'var(--bg)' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <span style={{ color: 'var(--accent)', marginRight: 8 }}>◇</span>
+          Loading…
+        </div>
       </div>
     )
   }
@@ -33,14 +37,14 @@ export default function AppShell() {
   if (!user) return null
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="oq-app">
       <Sidebar theme={theme} onThemeChange={setTheme} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: '1.75rem 2rem' }}>
+      <main className="oq-main">
+        <ErrorBoundary>
           <Outlet />
-        </main>
-        <StatusBar />
-      </div>
+        </ErrorBoundary>
+      </main>
+      <StatusBar />
     </div>
   )
 }

@@ -71,3 +71,33 @@ func (s *ProfileService) DeleteAccount(ctx context.Context, userID uuid.UUID) er
 	}
 	return s.users.Delete(ctx, userID)
 }
+
+// SessionInfo is a safe, non-sensitive view of a refresh token session.
+type SessionInfo struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// ListSessions returns all active sessions for the user.
+func (s *ProfileService) ListSessions(ctx context.Context, userID uuid.UUID) ([]SessionInfo, error) {
+	tokens, err := s.tokens.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SessionInfo, 0, len(tokens))
+	for _, t := range tokens {
+		out = append(out, SessionInfo{ID: t.ID, CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt})
+	}
+	return out, nil
+}
+
+// RevokeSession deletes a single session owned by userID.
+func (s *ProfileService) RevokeSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	return s.tokens.DeleteByID(ctx, sessionID, userID)
+}
+
+// RevokeAllSessions signs the user out of every session.
+func (s *ProfileService) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
+	return s.tokens.DeleteByUserID(ctx, userID)
+}

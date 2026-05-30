@@ -18,8 +18,8 @@ type Config struct {
 	JWTAccessTTL  time.Duration
 	JWTRefreshTTL time.Duration
 
-	AnthropicAPIKey string
-	ClaudeModel     string
+	GeminiAPIKey string
+	GeminiModel  string
 
 	LeetCodeAPIURL string
 }
@@ -38,8 +38,8 @@ func Load() *Config {
 		JWTAccessTTL:  parseDuration("JWT_ACCESS_TTL", 15*time.Minute),
 		JWTRefreshTTL: parseDuration("JWT_REFRESH_TTL", 168*time.Hour),
 
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		ClaudeModel:     getEnv("CLAUDE_MODEL", "claude-sonnet-4-5"),
+		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
+		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.0-flash"),
 
 		LeetCodeAPIURL: getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
 	}

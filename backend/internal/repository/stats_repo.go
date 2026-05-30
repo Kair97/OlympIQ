@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"olympiq/backend/internal/models"
@@ -36,15 +38,19 @@ func (r *pgStatsRepo) LatestByUserIDAndPlatform(ctx context.Context, userID uuid
 		&s.ID, &s.UserID, &s.Platform, &s.Rating, &s.Rank,
 		&s.MaxRating, &s.ProblemsSolved, &s.ContestCount, &s.RawData, &s.FetchedAt,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
+// ListByUserID returns only the most recent snapshot per platform (no duplicate cards).
 func (r *pgStatsRepo) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.UserStats, error) {
-	q := `SELECT id, user_id, platform, rating, rank, max_rating, problems_solved, contest_count, raw_data, fetched_at
-	      FROM user_stats WHERE user_id=$1 ORDER BY fetched_at DESC`
+	q := `SELECT DISTINCT ON (platform) id, user_id, platform, rating, rank, max_rating, problems_solved, contest_count, raw_data, fetched_at
+	      FROM user_stats WHERE user_id=$1 ORDER BY platform, fetched_at DESC`
 	rows, err := r.db.Query(ctx, q, userID)
 	if err != nil {
 		return nil, err
