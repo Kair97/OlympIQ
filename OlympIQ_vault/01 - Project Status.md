@@ -43,25 +43,27 @@ last_updated: 2026-05-30
 | File | Status | Notes |
 |------|--------|-------|
 | `.gitignore` | Modified | Added Obsidian workspace exclusions |
-| `backend/internal/handlers/analyzer.go` | Modified | Step 18 in-progress |
-| `frontend/src/pages/Analyzer.tsx` | Modified | Step 18 in-progress |
+| `backend/internal/handlers/analyzer.go` | Modified | Step 18 complete |
+| `backend/internal/services/ai_service.go` | Modified | Fixed: ErrExternal wrapping on unmarshal fail |
+| `frontend/src/pages/Analyzer.tsx` | Modified | Step 18 complete — Atelier design + sample problems |
+| `frontend/src/api/client.ts` | Modified | Fixed: login 401 no longer triggers refresh loop |
+| `CLAUDE.md` | Modified | Added brain update protocol |
 | `OlympIQ_vault/` | Untracked | Entire vault directory |
 
 ---
 
-## Last significant work
+## Last significant work (2026-05-30)
 
-- `85b08e4` — bulk commit of all prior fixes and features
-- `a13a838` — fix: remove unused key variable in Heatmap component
-- `5b6b015` — feat: full dashboard stats — sparkline, topic bars, heatmap, skill breakdown
-- `42e5336` — fix: dedup dashboard stats, roadmap 500, Gemini JSON wrapping
-- `f5ccb98` — fix: accounts connect, missing routes, AI test, user_goals constraint
+- **Step 18 COMPLETE** — Analyzer.tsx matches Atelier design: sample problem pane, sample switcher, full statement/constraints/examples in left column
+- **Bug fixed** — POST /analyze was returning 500 (Gemini unmarshal error swallowed). Now returns 502 with actual error message
+- **Bug fixed** — Login form was clearing fields on wrong password. Root cause: Axios 401 interceptor was catching login failures and doing `window.location.href = '/login'` (full reload). Fixed with `isAuthRoute` guard
+- **Vault** — brain update protocol added to CLAUDE.md
 
 ---
 
 ## Next tasks
 
-1. Finish `analyzer.go` + `Analyzer.tsx` — 2-column razbor layout, no code editor (step 18)
+1. Commit all modified files
 2. Step 20 — Nginx production config + TLS
 3. Step 21 — Prometheus metrics + Grafana dashboard
 4. Step 22 — README + architecture diagram

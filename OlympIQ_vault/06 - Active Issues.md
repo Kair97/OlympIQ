@@ -12,10 +12,10 @@ last_updated: 2026-05-30
 
 ## In Progress
 
-### Analyzer — backend + frontend (Step 18)
-- **Files:** `backend/internal/handlers/analyzer.go`, `frontend/src/pages/Analyzer.tsx`
-- **Status:** Both files modified (uncommitted)
-- **What's needed:** Finish the 2-column razbor layout per spec in [[05 - Frontend]]
+### Analyzer — DONE (Step 18 complete)
+- `Analyzer.tsx` fully updated to match Atelier design
+- `analyzer.go` fixes applied
+- Status: both files modified (uncommitted) — ready to commit
 
 ---
 
@@ -23,6 +23,9 @@ last_updated: 2026-05-30
 
 | Date | What broke | Fix applied |
 |------|-----------|------------|
+| 2026-05-30 | **500 on POST /analyze** — `json.Unmarshal` failure returned raw Go error, not wrapped in `ErrExternal`, hit `default` case in `mapServiceErr` | Wrap unmarshal error: `fmt.Errorf("%w: failed to parse Gemini response (status %d): %v", ErrExternal, resp.StatusCode, err)` |
+| 2026-05-30 | **Login form clears on wrong password** — Axios 401 interceptor fires on `/auth/login` 401, tries token refresh, that fails, does `window.location.href = '/login'` = full page reload | Added `const isAuthRoute = original?.url?.startsWith('/auth/')` guard — skip interceptor for auth routes |
+| 2026-05-30 | **GEMINI_API_KEY format** — key starting with `AQ.` is suspect; standard Google AI Studio keys start with `AIza`. If Gemini returns non-JSON (HTML error page), the unmarshal fails silently as 500 | Now returns 502 with actual Gemini error message surfaced to frontend |
 | 2026-05-30 | Heatmap: unused `key` variable causing lint error | Removed unused variable |
 | 2026-05-29 | Dashboard stats deduplication (duplicate API calls) | Fixed dedup logic |
 | 2026-05-29 | Roadmap endpoint returning 500 | Fixed AI JSON parsing — was wrapping in markdown fences |
@@ -50,3 +53,6 @@ last_updated: 2026-05-30
 - AI responses: always strip markdown fences before parsing JSON (already fixed, but fragile)
 - `buildStudentContext` reads from Redis; if cache is cold (first sync), AI calls may have sparse data
 - TypeScript strict mode — no `any` types; watch for implicit any in new components
+- **Gemini model name** — `GEMINI_MODEL=gemini-2.5-flash` in `.env`. If this model is unavailable on v1beta, change to `gemini-2.0-flash` (confirmed working)
+- **Axios interceptor** — 401 from `/auth/login` must NOT trigger the token refresh loop. The `isAuthRoute` guard in `client.ts` handles this — do not remove it
+- **mapServiceErr default case** — any error not wrapped with a typed sentinel (`ErrExternal`, `ErrNotFound`, etc.) returns 500. Always wrap errors from external calls with `ErrExternal`

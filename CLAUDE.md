@@ -25,12 +25,42 @@ The vault at `OlympIQ_vault/` is the fastest way to load project context — pre
 
 | Task | Read in order |
 |------|--------------|
-| Backend work | `_context.md` → `06 - Active Issues.md` → `Backend/04 - Backend.md` |
-| Frontend work | `_context.md` → `06 - Active Issues.md` → `Frontend/05 - Frontend.md` |
-| Architecture / DB | `_context.md` → `03 - Architecture.md` |
+| Backend work | `06 - Active Issues.md` → `Backend/04 - Backend.md` |
+| Frontend work | `06 - Active Issues.md` → `Frontend/05 - Frontend.md` |
+| Architecture / DB | `03 - Architecture.md` |
 | Full orientation | All notes `00 - Index.md` through `07 - Decisions Log.md` |
 
-After completing any work: update `01 - Project Status.md` and append a bullet to `Sessions/README.md`.
+---
+
+## Brain update protocol — MANDATORY after every task
+
+**This is not optional. After finishing any piece of work — fix, feature, improvement — you MUST write to the vault. No exceptions.**
+
+### What to update and where
+
+| Event | Where to write |
+|-------|---------------|
+| Bug fixed | Add a row to `06 - Active Issues.md` "Recently Fixed" table: date, what broke, exact fix |
+| New bug or blocker discovered | Add to `06 - Active Issues.md` "In Progress" section immediately |
+| Feature completed | Update `01 - Project Status.md` — mark step done, update "Files modified", update "Next tasks" |
+| Architectural decision made | Add entry to `07 - Decisions Log.md` with the decision and WHY |
+| "Gotcha" discovered (API quirk, env issue, library behavior) | Add to `06 - Active Issues.md` "Watch List" |
+| Session ends | Append a bullet to `Sessions/README.md` with: date, what was done, what was fixed, what's next |
+
+### What counts as "every fk thing"
+
+- A 500 was caused by X → write the root cause and fix
+- An env var was wrong → write the correct format
+- An API returns data in unexpected shape → write the shape
+- A CSS class was missing → write what was added and why
+- A workflow pattern was discovered → write it so it's never rediscovered
+- Anything that took more than 5 minutes to debug → write it
+
+### The goal
+
+The vault is a brain. Each session it gets smarter. Claude reads the brain at the start of every session. If you write the lesson, Claude will never repeat that mistake. If you don't write it, Claude will make the same mistake next time.
+
+**Read vault at start → Do work → Write lessons to vault → Next session is smarter.**
 
 ---
 

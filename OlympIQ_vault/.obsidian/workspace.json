@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Frontend/05 - Frontend.md",
+                "file": "Backend/Codeforces API Reference.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "05 - Frontend"
+              "title": "Codeforces API Reference"
             }
           }
         ]
@@ -185,20 +185,25 @@
   },
   "active": "8e709728bbc85cb6",
   "lastOpenFiles": [
-    "Claude Prompts.md",
+    "Sessions/README.md.tmp.19408.221fe9df0d96",
+    "00 - Index.md.tmp.19408.7534b5ef47b0",
+    "Backend/LeetCode alfa-leetcode-api Reference.md",
+    "Backend/LeetCode alfa-leetcode-api Reference.md.tmp.19408.b04a9a6734a6",
+    "Backend/Codeforces API Reference.md",
+    "Sessions/README.md.tmp.19408.98de81bd8fa0",
+    "00 - Index.md.tmp.19408.efd4fc37eced",
+    "Backend/Codeforces API Reference.md.tmp.19408.8b30c5365080",
+    "03 - Architecture.md",
     "Templates/session-log.md",
+    "06 - Active Issues.md.tmp.20372.d826ccbe14ae",
+    "Frontend/05 - Frontend.md",
+    "Claude Prompts.md",
     "Templates/session-log.md.tmp.8948.a36cb812b18c",
     "Sessions/README.md.tmp.8948.e95b1c02818d",
     "03 - Architecture.md.tmp.8948.4b4fe22d91fe",
     "01 - Project Status.md.tmp.8948.593890dcb83e",
-    "00 - Index.md.tmp.8948.a24e0d553fba",
     "_context.md",
-    "_context.md.tmp.8948.7c146f1fbf93",
-    "Templates",
-    "Frontend/05 - Frontend.md",
-    "Frontend",
     "Backend/04 - Backend.md",
-    "Backend",
     "04 - Backend.md",
     "Welcome.md",
     "02 - Build Checklist.md",
@@ -206,11 +211,9 @@
     "create a link.md",
     "00 - Index.md",
     "01 - Project Status.md",
-    "Welcome.md.tmp.8948.5b4dcfd3d5a5",
     "Sessions/README.md",
     "07 - Decisions Log.md",
     "06 - Active Issues.md",
-    "05 - Frontend.md",
-    "03 - Architecture.md"
+    "05 - Frontend.md"
   ]
 }

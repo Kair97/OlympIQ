@@ -21,7 +21,7 @@ export default function AppShell() {
       .then((u) => setUser(u))
       .catch(() => { setUser(null); navigate('/login') })
       .finally(() => setLoading(false))
-  }, [navigate, setLoading, setUser])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
