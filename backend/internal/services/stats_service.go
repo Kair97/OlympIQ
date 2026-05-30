@@ -139,17 +139,18 @@ func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle stri
 	}
 
 	tagFreq := BuildTagFrequency(subs)
-	solvedCount := 0
-	for _, v := range tagFreq {
-		if v > solvedCount {
-			solvedCount = v
+	seen := make(map[string]bool)
+	for _, sub := range subs {
+		if sub.Verdict == "OK" {
+			seen[fmt.Sprintf("%d/%s", sub.Problem.ContestID, sub.Problem.Index)] = true
 		}
 	}
+	solvedCount := len(seen)
 
 	rawData := map[string]interface{}{
 		"user":           info,
 		"tag_freq":       tagFreq,
-		"sub_count":      len(subs),
+		"sub_count":      solvedCount,
 		"rating_history": historyPoints,
 		"contest_count":  len(history),
 	}
@@ -253,7 +254,7 @@ func parseCFDashboard(handle string, stat *models.UserStats) *CFDashboard {
 func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 	d := &LCDashboard{Handle: handle}
 	if stat.Rank != nil {
-		d.Ranking, _ = fmt.Sscanf(*stat.Rank, "#%d", &d.Ranking)
+		fmt.Sscanf(*stat.Rank, "#%d", &d.Ranking)
 	}
 
 	if len(stat.RawData) == 0 {

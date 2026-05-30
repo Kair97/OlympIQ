@@ -231,10 +231,10 @@ func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: failed to parse Gemini response (status %d): %v", ErrExternal, resp.StatusCode, err)
 	}
 	if result.Error != nil {
-		return "", fmt.Errorf("%w: %s", ErrExternal, result.Error.Message)
+		return "", fmt.Errorf("%w: Gemini error: %s", ErrExternal, result.Error.Message)
 	}
 	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
 		return stripMarkdownFences(result.Candidates[0].Content.Parts[0].Text), nil
