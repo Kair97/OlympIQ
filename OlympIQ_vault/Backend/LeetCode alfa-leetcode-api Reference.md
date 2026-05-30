@@ -12,6 +12,8 @@ last_updated: 2026-05-30
 **Public fallback:** `https://alfa-leetcode-api.onrender.com`
 **Env var:** `LEETCODE_API_URL=http://leetcode-api:3000`
 
+**Critical:** Never call `leetcode.com` directly from Postman or backend — it returns `403 Forbidden` to all non-browser requests (no session cookie). Always use this proxy for data. The `https://leetcode.com/problems/{slug}/` links that appear in the UI are `target="_blank"` buttons for the user's own browser — not API calls your code makes.
+
 **Error behaviour:**
 - `HTTP 404` — username not found or problem slug invalid
 - `HTTP 500` — LeetCode upstream error

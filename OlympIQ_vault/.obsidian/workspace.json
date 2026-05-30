@@ -11,14 +11,10 @@
             "id": "8e709728bbc85cb6",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Backend/Codeforces API Reference.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Codeforces API Reference"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
             }
           }
         ]
@@ -185,11 +181,13 @@
   },
   "active": "8e709728bbc85cb6",
   "lastOpenFiles": [
+    "Backend/Codeforces API Reference.md",
+    "06 - Active Issues.md.tmp.19408.0e073d4b2458",
+    "06 - Active Issues.md.tmp.20372.e38b4e1454d5",
     "Sessions/README.md.tmp.19408.221fe9df0d96",
     "00 - Index.md.tmp.19408.7534b5ef47b0",
     "Backend/LeetCode alfa-leetcode-api Reference.md",
     "Backend/LeetCode alfa-leetcode-api Reference.md.tmp.19408.b04a9a6734a6",
-    "Backend/Codeforces API Reference.md",
     "Sessions/README.md.tmp.19408.98de81bd8fa0",
     "00 - Index.md.tmp.19408.efd4fc37eced",
     "Backend/Codeforces API Reference.md.tmp.19408.8b30c5365080",
@@ -199,9 +197,6 @@
     "Frontend/05 - Frontend.md",
     "Claude Prompts.md",
     "Templates/session-log.md.tmp.8948.a36cb812b18c",
-    "Sessions/README.md.tmp.8948.e95b1c02818d",
-    "03 - Architecture.md.tmp.8948.4b4fe22d91fe",
-    "01 - Project Status.md.tmp.8948.593890dcb83e",
     "_context.md",
     "Backend/04 - Backend.md",
     "04 - Backend.md",

@@ -62,6 +62,33 @@ The vault is a brain. Each session it gets smarter. Claude reads the brain at th
 
 **Read vault at start → Do work → Write lessons to vault → Next session is smarter.**
 
+### ⚠️ NON-NEGOTIABLE RULE
+
+After EVERY response where you changed code, fixed a bug, added a feature, or discovered anything new:
+1. Update `OlympIQ_vault/06 - Active Issues.md` — add to Recently Fixed or Watch List
+2. Update `OlympIQ_vault/01 - Project Status.md` — sync modified files and next tasks
+3. If it was a session with multiple changes, add one line to `OlympIQ_vault/Sessions/README.md`
+
+If you skip this, the user will ask the same question again next session. Do not skip it.
+
+---
+
+## n8n AI Agents
+
+Two production agents. Both use `When Last Node Finishes` mode. Backend unwraps `[{"output":"..."}]` envelope automatically.
+
+| Agent | Webhook URL | Input format |
+|-------|-------------|-------------|
+| Problem Analyzer | `https://kair97.app.n8n.cloud/webhook/olympiq-problem-analysis` | `{ "problem_url": "string" }` |
+| Roadmap Generator | `https://kair97.app.n8n.cloud/webhook/coding-roadmap` | See payload builder in `callN8NRoadmap()` |
+
+**Analyzer** — called from `ai_service.go:AnalyzeProblem()` when `N8N_ANALYZER_URL` is set in `.env`
+**Roadmap** — called from `ai_service.go:GenerateRoadmap()` when `N8N_ROADMAP_URL` is set in `.env`
+
+Both fall back to Gemini if the env var is empty.
+
+User data for roadmap is fetched live from Codeforces API + alfa-leetcode-api before the n8n call — the payload always contains real stats, never hardcoded sample data.
+
 ---
 
 ## Design system

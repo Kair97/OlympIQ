@@ -38,6 +38,13 @@ last_updated: 2026-05-30
 
 ---
 
+## Current position in build order
+
+> **Step 18–19 complete. Working on n8n AI integration.**
+> Steps 20–22 (Nginx prod, Prometheus, README) pending.
+
+---
+
 ## Files currently modified (uncommitted)
 
 | File | Status | Notes |
@@ -63,7 +70,9 @@ last_updated: 2026-05-30
 
 ## Next tasks
 
-1. Commit all modified files
-2. Step 20 — Nginx production config + TLS
-3. Step 21 — Prometheus metrics + Grafana dashboard
-4. Step 22 — README + architecture diagram
+1. Commit all modified files (analyzer, ai_service, client, appshell, env, config)
+2. Test full chain: Postman → `/api/v1/analyze` → n8n analyzer → response
+3. Test full chain: Postman → `/api/v1/roadmap/generate` → n8n roadmap → response
+4. Step 20 — Nginx production config + TLS
+5. Step 21 — Prometheus metrics + Grafana dashboard
+6. Step 22 — README + architecture diagram

@@ -21,6 +21,9 @@ type Config struct {
 	GeminiAPIKey string
 	GeminiModel  string
 
+	N8NAnalyzerURL string
+	N8NRoadmapURL  string
+
 	LeetCodeAPIURL string
 }
 
@@ -40,6 +43,9 @@ func Load() *Config {
 
 		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.0-flash"),
+
+		N8NAnalyzerURL: os.Getenv("N8N_ANALYZER_URL"),
+		N8NRoadmapURL:  os.Getenv("N8N_ROADMAP_URL"),
 
 		LeetCodeAPIURL: getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
 	}
