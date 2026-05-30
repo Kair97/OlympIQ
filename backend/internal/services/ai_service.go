@@ -38,26 +38,30 @@ type StudentContext struct {
 	LCContestRating float64
 	LCWeakTopics    []string
 	LCSolvedSlugs   []string
+	LCTopics        map[string]int // full topic → problems_solved map
 
 	Goals *models.UserGoal
 }
 
-// AIService handles Gemini API calls for roadmap, razbor, and recommendations.
+// AIService handles AI calls for roadmap, razbor, and recommendations.
+// Uses n8n webhooks when configured; falls back to Gemini otherwise.
 type AIService struct {
-	apiKey    string
-	model     string
-	http      *http.Client
-	platforms repository.PlatformRepository
-	stats     repository.StatsRepository
-	goals     repository.GoalsRepository
-	cache     CacheStore
-	cf        *CodeforcesService
-	lc        *LeetCodeService
+	apiKey         string
+	model          string
+	n8nAnalyzerURL string
+	n8nRoadmapURL  string
+	http           *http.Client
+	platforms      repository.PlatformRepository
+	stats          repository.StatsRepository
+	goals          repository.GoalsRepository
+	cache          CacheStore
+	cf             *CodeforcesService
+	lc             *LeetCodeService
 }
 
-// NewAIService constructs an AIService backed by Google Gemini.
+// NewAIService constructs an AIService.
 func NewAIService(
-	apiKey, model string,
+	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -66,15 +70,17 @@ func NewAIService(
 	lc *LeetCodeService,
 ) *AIService {
 	return &AIService{
-		apiKey:    apiKey,
-		model:     model,
-		http:      &http.Client{Timeout: 90 * time.Second},
-		platforms: platforms,
-		stats:     stats,
-		goals:     goals,
-		cache:     cache,
-		cf:        cf,
-		lc:        lc,
+		apiKey:         apiKey,
+		model:          model,
+		n8nAnalyzerURL: n8nAnalyzerURL,
+		n8nRoadmapURL:  n8nRoadmapURL,
+		http:           &http.Client{Timeout: 90 * time.Second},
+		platforms:      platforms,
+		stats:          stats,
+		goals:          goals,
+		cache:          cache,
+		cf:             cf,
+		lc:             lc,
 	}
 }
 
@@ -140,7 +146,9 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 			if skill != nil {
 				allTags := append(skill.Data.Fundamental, skill.Data.Intermediate...)
 				allTags = append(allTags, skill.Data.Advanced...)
+				sc.LCTopics = make(map[string]int, len(allTags))
 				for _, t := range allTags {
+					sc.LCTopics[t.TagName] = t.ProblemsSolved
 					if t.ProblemsSolved < 5 {
 						sc.LCWeakTopics = append(sc.LCWeakTopics, t.TagName)
 					}
@@ -160,16 +168,187 @@ func (s *AIService) TestConnection(ctx context.Context) (string, error) {
 	return s.callGemini(ctx, "You are a helpful assistant.", "Reply with exactly: OlympIQ AI is working!")
 }
 
-// GenerateRoadmap calls Gemini and returns the JSON roadmap string.
+// GenerateRoadmap generates a roadmap. Uses n8n webhook if configured, otherwise Gemini.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
+	if s.n8nRoadmapURL != "" {
+		return s.callN8NRoadmap(ctx, sc, mode)
+	}
 	userMsg := buildRoadmapUserMessage(sc, mode)
 	return s.callGemini(ctx, roadmapSystemPrompt, userMsg)
 }
 
-// AnalyzeProblem calls Gemini and returns the JSON razbor string.
+// callN8NRoadmap sends the full user context to the n8n roadmap webhook.
+// It builds the exact payload format the n8n agent expects.
+func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
+	payload := map[string]interface{}{
+		"username":     orNA(sc.CFHandle),
+		"mode":         mode,
+		"weekly_hours": 15,
+	}
+
+	// Use LCHandle as username if CF handle not set
+	if sc.CFHandle == "" && sc.LCHandle != "" {
+		payload["username"] = sc.LCHandle
+	}
+
+	// Codeforces data
+	if sc.CFHandle != "" {
+		ratingHistory := make([]int, 0, len(sc.CFRecentRating))
+		for _, r := range sc.CFRecentRating {
+			ratingHistory = append(ratingHistory, r.NewRating)
+		}
+		payload["codeforces"] = map[string]interface{}{
+			"rating":          sc.CFRating,
+			"rank":            orNA(sc.CFRank),
+			"problems_solved": len(sc.CFSolvedKeys),
+			"topics":          sc.CFTagFreq,
+			"rating_history":  ratingHistory,
+		}
+	}
+
+	// LeetCode data
+	if sc.LCHandle != "" {
+		lcTopics := sc.LCTopics
+		if lcTopics == nil {
+			lcTopics = make(map[string]int)
+		}
+		payload["leetcode"] = map[string]interface{}{
+			"total_solved": sc.LCTotalSolved,
+			"easy":         sc.LCEasy,
+			"medium":       sc.LCMedium,
+			"hard":         sc.LCHard,
+			"topics":       lcTopics,
+		}
+	}
+
+	// Goals
+	if sc.Goals != nil {
+		payload["goal"] = sc.Goals.GoalType
+		if sc.Goals.TargetDate != nil {
+			payload["deadline"] = sc.Goals.TargetDate.Format("2006-01-02")
+		}
+		if sc.Goals.TargetRating != nil {
+			payload["target_rating"] = *sc.Goals.TargetRating
+		}
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build n8n roadmap request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nRoadmapURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: n8n roadmap request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read n8n roadmap response: %v", ErrExternal, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: n8n roadmap returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	// Unwrap n8n envelope: [{"output":"...json..."}]
+	cleaned := stripMarkdownFences(strings.TrimSpace(string(respBody)))
+	if strings.HasPrefix(cleaned, "[") {
+		var envelope []map[string]json.RawMessage
+		if json.Unmarshal([]byte(cleaned), &envelope) == nil && len(envelope) > 0 {
+			for _, key := range []string{"output", "json", "text", "result"} {
+				if raw, ok := envelope[0][key]; ok {
+					inner := strings.TrimSpace(string(raw))
+					if strings.HasPrefix(inner, `"`) {
+						var s string
+						if json.Unmarshal(raw, &s) == nil {
+							cleaned = stripMarkdownFences(s)
+							break
+						}
+					} else {
+						cleaned = inner
+						break
+					}
+				}
+			}
+		}
+	}
+	return cleaned, nil
+}
+
+// AnalyzeProblem analyzes a problem. Uses n8n webhook if configured, otherwise Gemini.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
+	if s.n8nAnalyzerURL != "" {
+		return s.callN8NAnalyzer(ctx, problemURL)
+	}
 	userMsg := fmt.Sprintf("Analyze this competitive programming problem:\n\nURL: %s\n\nProvide a complete educational razbor. Do not write any working solution code.", sanitize(problemURL))
 	return s.callGemini(ctx, razborSystemPrompt, userMsg)
+}
+
+// callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
+func (s *AIService) callN8NAnalyzer(ctx context.Context, problemURL string) (string, error) {
+	body, err := json.Marshal(map[string]string{
+		"problem_url": sanitize(problemURL),
+	})
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build n8n request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nAnalyzerURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: n8n request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read n8n response: %v", ErrExternal, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: n8n returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	// n8n may wrap the JSON in an array: [{ "output": "{...}" }] or return the object directly.
+	// Try direct parse first, then unwrap n8n's default array envelope.
+	cleaned := stripMarkdownFences(strings.TrimSpace(string(respBody)))
+
+	// If it starts with '[', unwrap the first element's "output" or "json" field.
+	if strings.HasPrefix(cleaned, "[") {
+		var envelope []map[string]json.RawMessage
+		if json.Unmarshal([]byte(cleaned), &envelope) == nil && len(envelope) > 0 {
+			for _, key := range []string{"output", "json", "text", "result", "analysis"} {
+				if raw, ok := envelope[0][key]; ok {
+					inner := strings.TrimSpace(string(raw))
+					// raw may be a JSON string (quoted) or a JSON object
+					if strings.HasPrefix(inner, `"`) {
+						var s string
+						if json.Unmarshal(raw, &s) == nil {
+							cleaned = stripMarkdownFences(s)
+							break
+						}
+					} else {
+						cleaned = inner
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return cleaned, nil
 }
 
 // GenerateRecommendations calls Gemini and returns a JSON array of problems.
