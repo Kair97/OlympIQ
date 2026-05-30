@@ -1,19 +1,30 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { logout } from '../../api/auth'
+import { useEffect, useState } from 'react'
+import { getAccounts } from '../../api/profile'
+import type { PlatformAccount } from '../../types'
 
-const links = [
-  { to: '/dashboard',       label: 'Dashboard',      icon: '⊞' },
-  { to: '/roadmap',         label: 'Roadmap',        icon: '🗺' },
-  { to: '/analyzer',        label: 'Analyzer',       icon: '🔍' },
-  { to: '/profile',         label: 'Profile',        icon: '⚙' },
+const navItems = [
+  { to: '/dashboard', label: 'Dashboard', glyph: '◐' },
+  { to: '/analyzer',  label: 'Analyzer',  glyph: '▣' },
+  { to: '/roadmap',   label: 'Roadmap',   glyph: '↗' },
+  { to: '/profile',   label: 'Profile',   glyph: '○' },
 ]
 
-interface Props { theme: string; onThemeChange: (t: string) => void }
+interface Props {
+  theme: string
+  onThemeChange: (t: string) => void
+}
 
 export default function Sidebar({ theme, onThemeChange }: Props) {
   const { user, setUser } = useAuthStore()
   const navigate = useNavigate()
+  const [accounts, setAccounts] = useState<PlatformAccount[]>([])
+
+  useEffect(() => {
+    getAccounts().then(a => setAccounts(a ?? [])).catch(() => {})
+  }, [])
 
   async function handleLogout() {
     await logout()
@@ -21,82 +32,101 @@ export default function Sidebar({ theme, onThemeChange }: Props) {
     navigate('/login')
   }
 
+  const initials = user?.username?.[0]?.toUpperCase() ?? '?'
+  const cfAcc = accounts.find(a => a.platform === 'codeforces')
+  const lcAcc = accounts.find(a => a.platform === 'leetcode')
+
   return (
-    <aside style={{
-      width: 248,
-      minWidth: 248,
-      background: 'var(--bg-sunken)',
-      borderRight: '1px solid var(--line)',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '1.5rem 0',
-      height: '100%',
-    }}>
-      <div style={{ padding: '0 1.25rem 1.5rem' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.125rem', color: 'var(--accent)' }}>
-          OlympIQ
-        </span>
+    <nav className="oq-sidenav">
+      {/* Brand */}
+      <div className="oq-brand">
+        <span className="oq-brand-mark">◇</span>
+        <span className="oq-brand-name">OlympIQ</span>
+        <span className="oq-brand-tag">β</span>
       </div>
 
-      <nav style={{ flex: 1 }}>
-        {links.map(({ to, label, icon }) => (
+      {/* Main nav */}
+      <div className="oq-nav-section">
+        <div className="oq-nav-label">workspace</div>
+        {navItems.map(({ to, label, glyph }) => (
           <NavLink
             key={to}
             to={to}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              padding: '0.625rem 1.25rem',
-              color: isActive ? 'var(--text)' : 'var(--text-dim)',
-              textDecoration: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              background: isActive ? 'var(--accent-soft)' : 'transparent',
-              boxShadow: isActive ? 'inset 2px 0 0 var(--accent)' : 'none',
-              transition: 'background 0.15s, color 0.15s',
-            })}
+            className={({ isActive }) => `oq-nav-item${isActive ? ' is-active' : ''}`}
           >
-            <span style={{ fontSize: '1rem' }}>{icon}</span>
-            {label}
+            <span className="oq-nav-glyph">{glyph}</span>
+            <span>{label}</span>
           </NavLink>
         ))}
-      </nav>
+      </div>
 
-      <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--line)' }}>
-        <div style={{ marginBottom: '0.75rem' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-faint)', marginBottom: 2 }}>Signed in as</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-dim)' }}>
-            {user?.username}
-          </div>
+      {/* Connected accounts */}
+      {(cfAcc || lcAcc) && (
+        <div className="oq-nav-section">
+          <div className="oq-nav-label">connected</div>
+          {cfAcc && (
+            <div className="oq-conn">
+              <span className="oq-dot oq-dot-ok" />
+              <span>codeforces</span>
+              <span className="oq-handle">@{cfAcc.handle}</span>
+            </div>
+          )}
+          {lcAcc && (
+            <div className="oq-conn">
+              <span className="oq-dot oq-dot-ok" />
+              <span>leetcode</span>
+              <span className="oq-handle">@{lcAcc.handle}</span>
+            </div>
+          )}
+          {!cfAcc && (
+            <div className="oq-conn">
+              <span className="oq-dot" />
+              <span style={{ color: 'var(--text-faint)' }}>codeforces</span>
+              <span className="oq-handle" style={{ color: 'var(--err)', opacity: 0.7 }}>not linked</span>
+            </div>
+          )}
+          {!lcAcc && (
+            <div className="oq-conn">
+              <span className="oq-dot" />
+              <span style={{ color: 'var(--text-faint)' }}>leetcode</span>
+              <span className="oq-handle" style={{ color: 'var(--err)', opacity: 0.7 }}>not linked</span>
+            </div>
+          )}
         </div>
+      )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          {['dark', 'dim', 'light'].map((t) => (
+      {/* Footer: user + theme + logout */}
+      <div className="oq-nav-foot">
+        {/* Theme row */}
+        <div className="oq-theme-row" style={{ marginBottom: 10 }}>
+          {['dark', 'dim', 'light'].map(t => (
             <button
               key={t}
+              className={`oq-theme-btn${theme === t ? ' is-active' : ''}`}
               onClick={() => onThemeChange(t)}
-              style={{
-                flex: 1,
-                padding: '0.25rem',
-                fontSize: '0.6875rem',
-                background: theme === t ? 'var(--accent-soft)' : 'var(--bg-elev)',
-                color: theme === t ? 'var(--accent-fg)' : 'var(--text-faint)',
-                border: '1px solid var(--line)',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                textTransform: 'capitalize',
-              }}
             >
               {t}
             </button>
           ))}
         </div>
 
-        <button onClick={handleLogout} className="oq-btn-ghost" style={{ width: '100%', justifyContent: 'center' }}>
-          Sign out
-        </button>
+        <div className="oq-user">
+          <div className="oq-avatar">{initials}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="oq-user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.username}
+            </div>
+            <div className="oq-user-meta">member</div>
+          </div>
+          <button
+            onClick={handleLogout}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-faint)', padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', flexShrink: 0 }}
+            title="Sign out"
+          >
+            ↩
+          </button>
+        </div>
       </div>
-    </aside>
+    </nav>
   )
 }

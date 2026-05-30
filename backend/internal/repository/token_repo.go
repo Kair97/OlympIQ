@@ -16,7 +16,9 @@ import (
 type TokenRepository interface {
 	Create(ctx context.Context, t *models.RefreshToken) error
 	FindByHash(ctx context.Context, hash string) (*models.RefreshToken, error)
+	ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.RefreshToken, error)
 	DeleteByHash(ctx context.Context, hash string) error
+	DeleteByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) error
 }
@@ -44,6 +46,36 @@ func (r *pgTokenRepo) FindByHash(ctx context.Context, hash string) (*models.Refr
 		return nil, err
 	}
 	return &t, nil
+}
+
+func (r *pgTokenRepo) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.RefreshToken, error) {
+	q := `SELECT id, user_id, token_hash, expires_at, created_at
+	      FROM refresh_tokens WHERE user_id=$1 AND expires_at > NOW() ORDER BY created_at DESC`
+	rows, err := r.db.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tokens []*models.RefreshToken
+	for rows.Next() {
+		var t models.RefreshToken
+		if err := rows.Scan(&t.ID, &t.UserID, &t.TokenHash, &t.ExpiresAt, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, &t)
+	}
+	return tokens, rows.Err()
+}
+
+func (r *pgTokenRepo) DeleteByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	res, err := r.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE id=$1 AND user_id=$2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *pgTokenRepo) DeleteByHash(ctx context.Context, hash string) error {

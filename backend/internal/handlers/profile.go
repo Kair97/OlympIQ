@@ -59,3 +59,44 @@ func (h *ProfileHandler) Delete(c *fiber.Ctx) error {
 	}
 	return ok(c, nil)
 }
+
+// ListSessions handles GET /sessions.
+func (h *ProfileHandler) ListSessions(c *fiber.Ctx) error {
+	uid, err := userUUID(c)
+	if err != nil {
+		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+	sessions, err := h.profile.ListSessions(c.Context(), uid)
+	if err != nil {
+		return mapServiceErr(c, err)
+	}
+	return ok(c, sessions)
+}
+
+// RevokeSession handles DELETE /sessions/:id.
+func (h *ProfileHandler) RevokeSession(c *fiber.Ctx) error {
+	uid, err := userUUID(c)
+	if err != nil {
+		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+	sessionID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return errResponse(c, fiber.StatusBadRequest, "invalid session id")
+	}
+	if err := h.profile.RevokeSession(c.Context(), uid, sessionID); err != nil {
+		return mapServiceErr(c, err)
+	}
+	return ok(c, nil)
+}
+
+// RevokeAllSessions handles DELETE /sessions (sign out everywhere).
+func (h *ProfileHandler) RevokeAllSessions(c *fiber.Ctx) error {
+	uid, err := userUUID(c)
+	if err != nil {
+		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+	if err := h.profile.RevokeAllSessions(c.Context(), uid); err != nil {
+		return mapServiceErr(c, err)
+	}
+	return ok(c, nil)
+}
