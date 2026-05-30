@@ -87,9 +87,27 @@ func (m *mockTokenRepo) FindByHash(ctx context.Context, hash string) (*models.Re
 	}
 	return nil, repository.ErrNotFound
 }
+func (m *mockTokenRepo) ListByUserID(_ context.Context, userID uuid.UUID) ([]*models.RefreshToken, error) {
+	var out []*models.RefreshToken
+	for _, t := range m.tokens {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
 func (m *mockTokenRepo) DeleteByHash(ctx context.Context, hash string) error {
 	delete(m.tokens, hash)
 	return nil
+}
+func (m *mockTokenRepo) DeleteByID(_ context.Context, id uuid.UUID, userID uuid.UUID) error {
+	for k, t := range m.tokens {
+		if t.ID == id && t.UserID == userID {
+			delete(m.tokens, k)
+			return nil
+		}
+	}
+	return repository.ErrNotFound
 }
 func (m *mockTokenRepo) DeleteByUserID(ctx context.Context, userID uuid.UUID) error {
 	for k, t := range m.tokens {

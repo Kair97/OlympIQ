@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>OlympIQ · Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="shared/app.css" />
+<style>
+  /* ──────── Direction B · Atelier ────────
+     Refined editorial-IDE. Same accent family, used delicately. Generous
+     radii, softer panels, warmer neutrals, more breathing room. */
+
+  :root {
+    --font-ui:   "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+    /* dark (default) — warmer than Console */
+    --bg:        oklch(0.20 0.012 270);
+    --bg-sunken: oklch(0.17 0.010 270);
+    --bg-elev:   oklch(0.26 0.014 270);
+    --panel:     oklch(0.23 0.012 270);
+
+    --line:        oklch(0.32 0.012 270 / 0.55);
+    --line-strong: oklch(0.42 0.014 270 / 0.8);
+
+    --text:       oklch(0.96 0.006 90);
+    --text-dim:   oklch(0.78 0.010 90);
+    --text-faint: oklch(0.58 0.012 90);
+
+    --accent:      oklch(0.72 0.16 305);
+    --accent-2:    oklch(0.72 0.20 25);
+    --accent-soft: oklch(0.72 0.16 305 / 0.14);
+    --accent-fg:   oklch(0.92 0.08 305);
+    --accent-on:   oklch(0.18 0.01 280);
+
+    --ok:   oklch(0.76 0.15 150);
+    --warn: oklch(0.78 0.15 75);
+    --err:  oklch(0.70 0.20 25);
+
+    --radius:    12px;
+    --radius-sm: 8px;
+    --radius-lg: 16px;
+
+    --code-kw:  oklch(0.76 0.16 305);
+    --code-std: oklch(0.76 0.13 210);
+    --code-num: oklch(0.78 0.15 80);
+    --code-str: oklch(0.76 0.13 150);
+    --code-com: oklch(0.55 0.014 90);
+    --code-pre: oklch(0.72 0.16 25);
+    --code-op:  oklch(0.84 0.01 90);
+  }
+
+  html[data-theme="light"] {
+    --bg:        oklch(0.985 0.005 80);
+    --bg-sunken: oklch(0.965 0.006 80);
+    --bg-elev:   oklch(0.948 0.007 80);
+    --panel:     oklch(1.000 0.000 0);
+
+    --line:        oklch(0.88 0.008 80);
+    --line-strong: oklch(0.78 0.010 80);
+
+    --text:       oklch(0.22 0.014 280);
+    --text-dim:   oklch(0.44 0.014 280);
+    --text-faint: oklch(0.62 0.010 280);
+
+    --accent:      oklch(0.50 0.22 305);
+    --accent-2:    oklch(0.58 0.20 25);
+    --accent-soft: oklch(0.50 0.22 305 / 0.10);
+    --accent-fg:   oklch(0.40 0.22 305);
+    --accent-on:   oklch(0.99 0.005 80);
+
+    --code-kw:  oklch(0.46 0.22 305);
+    --code-std: oklch(0.48 0.16 220);
+    --code-num: oklch(0.52 0.18 60);
+    --code-str: oklch(0.45 0.16 145);
+    --code-com: oklch(0.60 0.010 80);
+    --code-pre: oklch(0.55 0.18 30);
+    --code-op:  oklch(0.30 0.01 280);
+  }
+
+  html[data-theme="dim"] {
+    --bg:        oklch(0.27 0.014 270);
+    --bg-sunken: oklch(0.24 0.012 270);
+    --bg-elev:   oklch(0.32 0.014 270);
+    --panel:     oklch(0.30 0.014 270);
+
+    --line:        oklch(0.40 0.014 270 / 0.6);
+    --line-strong: oklch(0.50 0.016 270 / 0.85);
+
+    --text:       oklch(0.96 0.008 90);
+    --text-dim:   oklch(0.80 0.012 90);
+    --text-faint: oklch(0.62 0.014 90);
+
+    --accent:      oklch(0.74 0.18 305);
+    --accent-soft: oklch(0.74 0.18 305 / 0.16);
+    --accent-fg:   oklch(0.94 0.08 305);
+    --accent-on:   oklch(0.22 0.01 270);
+  }
+
+  /* Atelier-specific flourishes — gentler, more editorial */
+
+  /* soft accent glow on panels */
+  .oq-panel, .oq-platcard {
+    box-shadow:
+      0 1px 0 0 oklch(1 0 0 / 0.03) inset,
+      0 16px 32px -28px oklch(0 0 0 / 0.4);
+  }
+
+  /* slightly more padding everywhere */
+  .oq-panel { padding: 20px 22px; }
+  .oq-platcard { padding: 22px 24px; gap: 18px; }
+  .oq-page { padding: 36px 42px 42px; }
+  .oq-page-head { margin-bottom: 32px; }
+
+  /* refined section dividers — hairlines, not dashes */
+  .oq-rs { border-bottom-style: solid; border-bottom-color: var(--line); }
+  .oq-history-eyebrow,
+  .oq-page-eyebrow,
+  .oq-section-label,
+  .oq-cx-lbl {
+    letter-spacing: 0.18em;
+  }
+
+  /* accent corner-mark on the sidenav brand */
+  .oq-brand { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+  .oq-brand-mark {
+    width: 22px; height: 22px;
+    display: inline-grid; place-items: center;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-on);
+    font-size: 11px;
+    filter: none;
+  }
+
+  /* gentler nav item */
+  .oq-nav-item { padding: 9px 12px; }
+  .oq-nav-item.is-active { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+
+  /* analyzer bar polish */
+  .oq-analyzer-bar { padding: 14px 22px; }
+
+  /* large razbor heading numerals */
+  .oq-rs-marker {
+    font-weight: 600;
+    background: transparent;
+    color: var(--accent);
+    padding-left: 0;
+  }
+  .oq-rs-marker::after {
+    content: " /";
+    color: var(--text-faint);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="shared/data.jsx"></script>
+<script type="text/babel" src="shared/app.jsx"></script>
+<script type="text/babel">
+  const params = new URLSearchParams(location.search);
+  const initialPage = params.get("page") || "analyzer";
+  window.mountOlympIQ(document.getElementById("root"), {
+    initialPage,
+    directionLabel: "atelier",
+    historyOpen: params.get("history") !== "0",
+  });
+</script>
+</body>
+</html>
