@@ -1,7 +1,7 @@
 ---
 title: Active Issues
 type: issues
-last_updated: 2026-05-30
+last_updated: 2026-05-31
 ---
 
 # Active Issues
@@ -12,10 +12,14 @@ last_updated: 2026-05-30
 
 ## In Progress
 
-### Analyzer — DONE (Step 18 complete)
-- `Analyzer.tsx` fully updated to match Atelier design
-- `analyzer.go` fixes applied
-- Status: both files modified (uncommitted) — ready to commit
+### Steps 20–22 — Pending
+- Step 20: Nginx production config + TLS
+- Step 21: Prometheus metrics + Grafana dashboard
+- Step 22: README + architecture diagram
+
+### Uncommitted changes
+- `backend/internal/handlers/analyzer.go` — normalizeAnalysis function added
+- `frontend/src/pages/Analyzer.tsx` — resizable panels + all Atelier design features
 
 ---
 
@@ -23,6 +27,8 @@ last_updated: 2026-05-30
 
 | Date | What broke | Fix applied |
 |------|-----------|------------|
+| 2026-05-31 | **Roadmap empty payload** — `BuildStudentContext` silently swallowed all API errors. If no platforms connected → sent empty payload to n8n. Fix: added `ErrBadRequest` if `len(accounts)==0`; errors no longer swallowed; CF rating history extended to last 24 contests | `ai_service.go: BuildStudentContext` |
+| 2026-05-31 | **Analyzer resizable panels** — added drag divider between left/right columns. Drag handle turns accent color on hover. Width clamped 25%-75%. Uses `mousedown/mousemove/mouseup` on `window` ref | `Analyzer.tsx: splitPct state + onDragStart` |
 | 2026-05-30 | **n8n Analyzer wired** — `N8N_ANALYZER_URL` in `.env` → backend routes `AnalyzeProblem` to n8n webhook instead of Gemini. Falls back to Gemini if URL is empty. n8n response may be wrapped in `[{"output":"..."}]` array — backend auto-unwraps it | Added `callN8NAnalyzer` in `ai_service.go`; added `N8NAnalyzerURL` to config |
 | 2026-05-30 | **500 on POST /analyze** — `json.Unmarshal` failure returned raw Go error, not wrapped in `ErrExternal`, hit `default` case in `mapServiceErr` | Wrap unmarshal error: `fmt.Errorf("%w: failed to parse Gemini response (status %d): %v", ErrExternal, resp.StatusCode, err)` |
 | 2026-05-30 | **Login form clears on wrong password** — Axios 401 interceptor fires on `/auth/login` 401, tries token refresh, that fails, does `window.location.href = '/login'` = full page reload | Added `const isAuthRoute = original?.url?.startsWith('/auth/')` guard — skip interceptor for auth routes |
@@ -75,3 +81,4 @@ last_updated: 2026-05-30
 - **Axios interceptor** — 401 from `/auth/login` must NOT trigger the token refresh loop. The `isAuthRoute` guard in `client.ts` handles this — do not remove it
 - **mapServiceErr default case** — any error not wrapped with a typed sentinel (`ErrExternal`, `ErrNotFound`, etc.) returns 500. Always wrap errors from external calls with `ErrExternal`
 - **LeetCode direct URLs return 403** — `https://leetcode.com/problems/{slug}/` blocks all non-browser HTTP requests (no session cookie = 403 Forbidden). NEVER call leetcode.com from backend or Postman. Always use the alfa-leetcode-api proxy (`http://leetcode-api:3000/select?titleSlug={slug}`). The `https://leetcode.com/problems/...` links in the UI are `target="_blank"` buttons for the user's own browser — not API calls.
+- **Brain vault** — `OlympIQ_vault/Brain/` contains 9 reference files. Read `Brain/00-Master-Context.md` first each session. Update `Brain/06-Errors-Bible.md` when discovering new error patterns.

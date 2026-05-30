@@ -1,14 +1,14 @@
 ---
 title: Project Status
 type: status
-last_updated: 2026-05-30
+last_updated: 2026-05-31
 ---
 
 # Project Status
 
 ## Current position in build order
 
-> **Step 18 of 22 — Analyzer page (backend + frontend, in-progress)**
+> **Steps 1–19 COMPLETE. Steps 20–22 pending.**
 > See [[02 - Build Checklist]] for the full list.
 
 ---
@@ -16,32 +16,34 @@ last_updated: 2026-05-30
 ## What's done
 
 **Backend (steps 1–13):** All done and committed.
-- Docker Compose skeleton, health/ready endpoints
+- Docker Compose skeleton with 8 services (postgres, redis, leetcode-api, backend, frontend, nginx, prometheus, grafana)
 - 8 DB migrations (001–008, includes user_goals UNIQUE constraint)
-- Auth: register, login, logout, refresh — JWT RS256, httpOnly cookies
-- Profile: get, update, delete
+- Auth: register, login, logout, refresh — JWT RS256 (PKCS1+PKCS8), httpOnly cookies
+- Profile: get, update, delete + sessions management (list/revoke/revoke-all)
 - Platform accounts: connect, disconnect, sync
-- Codeforces service: user.info + rating + status, Redis cache
-- LeetCode service: profile, contest, acSubmission, skill, calendar, Redis cache
-- Stats sync handler
-- `buildStudentContext()` in ai_service.go
-- Claude AI service: roadmap, recommendations, analyzer prompts
-- Roadmap generation (weekly/topic/interview)
+- Codeforces service: user.info + rating + status, Redis cache (1h TTL)
+- LeetCode service: profile, contest, acSubmission, skill, calendar, Redis cache (1h TTL)
+- Stats sync handler + `/dashboard` endpoint with rich parsed data
+- `BuildStudentContext()` in ai_service.go — aggregates CF+LC data for AI prompts
+- AI service: Gemini REST + n8n webhook routing (analyzer + roadmap)
+- Roadmap generation (weekly/topic/interview modes)
 - Recommendation engine
+- Analyzer: razbor endpoint + analysis history pagination
 
-**Frontend (steps 14–19 except 18):** All done and committed.
-- Auth pages: Login.tsx, Register.tsx
-- App shell: AppShell.tsx, Sidebar.tsx, StatusBar.tsx
-- Dashboard.tsx — full stats, sparkline, heatmap, topic bars, skill breakdown
-- Roadmap.tsx — mode tabs, goal card, weekly/topic/interview views
+**Frontend (steps 14–19):** All done and committed.
+- Auth pages: Login.tsx (with isAuthRoute guard), Register.tsx
+- App shell: AppShell.tsx (empty deps refresh), Sidebar.tsx, StatusBar.tsx
+- Dashboard.tsx — platform cards, sparkline, heatmap, topic bars, skill breakdown
+- Roadmap.tsx — mode tabs, goal card, weekly/topic/interview views, external problem links
+- Analyzer.tsx — resizable 2-column, sample problems, hint ladder, history sidebar
 - Profile.tsx — identity edit, password change, platform connect/disconnect, danger zone
 
----
+**n8n integration:** Both agents wired and working.
+- Analyzer: `https://kair97.app.n8n.cloud/webhook/olympiq-problem-analysis`
+- Roadmap: `https://kair97.app.n8n.cloud/webhook/coding-roadmap`
+- Backend auto-unwraps n8n envelope `[{"output":"..."}]`
 
-## Current position in build order
-
-> **Step 18–19 complete. Working on n8n AI integration.**
-> Steps 20–22 (Nginx prod, Prometheus, README) pending.
+**Vault brain:** Complete Brain/ directory with 10 reference files.
 
 ---
 
@@ -49,30 +51,25 @@ last_updated: 2026-05-30
 
 | File | Status | Notes |
 |------|--------|-------|
-| `.gitignore` | Modified | Added Obsidian workspace exclusions |
-| `backend/internal/handlers/analyzer.go` | Modified | Step 18 complete |
-| `backend/internal/services/ai_service.go` | Modified | Fixed: ErrExternal wrapping on unmarshal fail |
-| `frontend/src/pages/Analyzer.tsx` | Modified | Step 18 complete — Atelier design + sample problems |
-| `frontend/src/api/client.ts` | Modified | Fixed: login 401 no longer triggers refresh loop |
-| `CLAUDE.md` | Modified | Added brain update protocol |
-| `OlympIQ_vault/` | Untracked | Entire vault directory |
+| `backend/internal/handlers/analyzer.go` | Modified | normalizeAnalysis + resizable panel support |
+| `frontend/src/pages/Analyzer.tsx` | Modified | Resizable panels, sample problems, history sidebar |
 
 ---
 
-## Last significant work (2026-05-30)
+## Last significant work (2026-05-31)
 
-- **Step 18 COMPLETE** — Analyzer.tsx matches Atelier design: sample problem pane, sample switcher, full statement/constraints/examples in left column
-- **Bug fixed** — POST /analyze was returning 500 (Gemini unmarshal error swallowed). Now returns 502 with actual error message
-- **Bug fixed** — Login form was clearing fields on wrong password. Root cause: Axios 401 interceptor was catching login failures and doing `window.location.href = '/login'` (full reload). Fixed with `isAuthRoute` guard
-- **Vault** — brain update protocol added to CLAUDE.md
+- **Vault brain built** — 9 comprehensive reference files in Brain/ directory covering all systems
+- **Resizable panels** in Analyzer.tsx — drag divider between problem/razbor columns (25%-75% clamped)
+- **BuildStudentContext fix** — now returns ErrBadRequest if no platforms connected (was silently sending empty payload)
+- **Rating history** — extended to last 24 contests (was only 5)
 
 ---
 
 ## Next tasks
 
-1. Commit all modified files (analyzer, ai_service, client, appshell, env, config)
-2. Test full chain: Postman → `/api/v1/analyze` → n8n analyzer → response
-3. Test full chain: Postman → `/api/v1/roadmap/generate` → n8n roadmap → response
-4. Step 20 — Nginx production config + TLS
+1. Commit all modified files (`analyzer.go`, `Analyzer.tsx`)
+2. Test full chain: Postman → `/api/v1/analyze` → n8n → parse response
+3. Test full chain: Postman → `/api/v1/roadmap/generate` → n8n → parse
+4. Step 20 — Nginx production config + TLS setup
 5. Step 21 — Prometheus metrics + Grafana dashboard
 6. Step 22 — README + architecture diagram

@@ -85,6 +85,8 @@ func NewAIService(
 }
 
 // BuildStudentContext assembles all user data for AI prompts.
+// It fetches live data from CF and LC APIs (using Redis cache where available).
+// Returns ErrBadRequest if no platforms are connected.
 func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (*StudentContext, error) {
 	sc := &StudentContext{}
 
@@ -92,19 +94,24 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
+	if len(accounts) == 0 {
+		return nil, fmt.Errorf("%w: no platforms connected — connect Codeforces or LeetCode in your profile first, then sync", ErrBadRequest)
+	}
 
 	for _, acc := range accounts {
 		switch acc.Platform {
 		case "codeforces":
 			sc.CFHandle = acc.Handle
-			info, _ := s.cf.GetUserInfo(ctx, acc.Handle)
-			if info != nil {
+
+			info, cfErr := s.cf.GetUserInfo(ctx, acc.Handle)
+			if cfErr == nil && info != nil {
 				sc.CFRating = info.Rating
 				sc.CFRank = info.Rank
 				sc.CFMaxRating = info.MaxRating
 			}
+
 			subs, _ := s.cf.GetSubmissions(ctx, acc.Handle, 500)
-			if subs != nil {
+			if len(subs) > 0 {
 				sc.CFTagFreq = BuildTagFrequency(subs)
 				seen := make(map[string]bool)
 				for _, sub := range subs {
@@ -117,15 +124,17 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 					}
 				}
 			}
+
 			hist, _ := s.cf.GetRatingHistory(ctx, acc.Handle)
-			if len(hist) > 5 {
-				sc.CFRecentRating = hist[len(hist)-5:]
+			if len(hist) > 24 {
+				sc.CFRecentRating = hist[len(hist)-24:]
 			} else {
 				sc.CFRecentRating = hist
 			}
 
 		case "leetcode":
 			sc.LCHandle = acc.Handle
+
 			profile, _ := s.lc.GetProfile(ctx, acc.Handle)
 			if profile != nil {
 				sc.LCRanking = profile.Ranking
@@ -134,14 +143,19 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 				sc.LCMedium = profile.MediumSolved
 				sc.LCHard = profile.HardSolved
 			}
+
 			contest, _ := s.lc.GetContest(ctx, acc.Handle)
 			if contest != nil {
 				sc.LCContestRating = contest.ContestRating
 			}
+
+			// Fetch all accepted submissions for solved list
 			subs, _ := s.lc.GetAcSubmissions(ctx, acc.Handle)
 			for _, sub := range subs {
 				sc.LCSolvedSlugs = append(sc.LCSolvedSlugs, sub.TitleSlug)
 			}
+
+			// Fetch full topic skill breakdown
 			skill, _ := s.lc.GetSkill(ctx, acc.Handle)
 			if skill != nil {
 				allTags := append(skill.Data.Fundamental, skill.Data.Intermediate...)
@@ -180,15 +194,16 @@ func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mod
 // callN8NRoadmap sends the full user context to the n8n roadmap webhook.
 // It builds the exact payload format the n8n agent expects.
 func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
-	payload := map[string]interface{}{
-		"username":     orNA(sc.CFHandle),
-		"mode":         mode,
-		"weekly_hours": 15,
+	// Pick username — prefer CF handle, fall back to LC
+	username := sc.CFHandle
+	if username == "" {
+		username = sc.LCHandle
 	}
 
-	// Use LCHandle as username if CF handle not set
-	if sc.CFHandle == "" && sc.LCHandle != "" {
-		payload["username"] = sc.LCHandle
+	payload := map[string]interface{}{
+		"username":     username,
+		"mode":         mode,
+		"weekly_hours": 15,
 	}
 
 	// Codeforces data

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, type FormEvent } from 'react'
+import { useEffect, useCallback, useState, useRef, type FormEvent } from 'react'
 import axios from 'axios'
 import { analyzeProblem, listAnalyses, getAnalysis } from '../api/analyzer'
 import { useAnalyzerStore } from '../store/analyzerStore'
@@ -606,6 +606,27 @@ export default function Analyzer() {
   const store = useAnalyzerStore()
   const model = 'gemini-2.5-flash'
   const [sampleIdx, setSampleIdx] = useState(0)
+  const [splitPct, setSplitPct] = useState(50)  // left column width %
+  const dragging = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    const onMove = (mv: MouseEvent) => {
+      if (!dragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const pct = ((mv.clientX - rect.left) / rect.width) * 100
+      setSplitPct(Math.min(75, Math.max(25, pct)))
+    }
+    const onUp = () => {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
 
   useEffect(() => {
     axios.get('/api/v1/config').catch(() => {})
@@ -743,18 +764,44 @@ export default function Analyzer() {
         </div>
       )}
 
-      {/* 2-column grid */}
-      <div className="oq-analyzer-grid" style={{ flex: 1, minHeight: 0 }}>
+      {/* Resizable 2-column grid */}
+      <div
+        ref={containerRef}
+        style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', position: 'relative' }}
+      >
         {/* Left: Problem pane */}
-        <div className="oq-col oq-col-prob">
+        <div
+          className="oq-col oq-col-prob"
+          style={{ width: `${splitPct}%`, minWidth: 0, flexShrink: 0 }}
+        >
           {store.currentContent
             ? <ProblemPane content={store.currentContent} url={store.currentURL} />
             : <SampleProblemPane p={SAMPLE_PROBLEMS[sampleIdx]} onAnalyze={handleSampleAnalyze} />
           }
         </div>
 
+        {/* Drag divider */}
+        <div
+          onMouseDown={onDragStart}
+          style={{
+            width: 5,
+            flexShrink: 0,
+            cursor: 'col-resize',
+            background: 'var(--line)',
+            transition: 'background 100ms',
+            position: 'relative',
+            zIndex: 2,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--line)')}
+          title="Drag to resize"
+        />
+
         {/* Right: Razbor pane */}
-        <div className="oq-col oq-col-razbor" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="oq-col oq-col-razbor"
+          style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        >
           <RazborPane model={model} />
         </div>
       </div>

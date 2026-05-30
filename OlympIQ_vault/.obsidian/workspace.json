@@ -181,6 +181,19 @@
   },
   "active": "8e709728bbc85cb6",
   "lastOpenFiles": [
+    "01 - Project Status.md.tmp.20372.a1bc47ca075d",
+    "Brain/09-Environment-Setup.md",
+    "Brain/08-Security.md",
+    "Brain/07-Testing-Guide.md",
+    "Brain/06-Errors-Bible.md",
+    "Brain/05-n8n-Agents.md",
+    "Brain/04-Frontend-Deep.md",
+    "Brain/00-Master-Context.md",
+    "Brain/03-Database.md",
+    "Brain/02-Backend-Deep.md",
+    "Brain/01-Architecture.md",
+    "Brain",
+    "Templates/session-log.md",
     "Backend/Codeforces API Reference.md",
     "06 - Active Issues.md.tmp.19408.0e073d4b2458",
     "06 - Active Issues.md.tmp.20372.e38b4e1454d5",
@@ -192,11 +205,9 @@
     "00 - Index.md.tmp.19408.efd4fc37eced",
     "Backend/Codeforces API Reference.md.tmp.19408.8b30c5365080",
     "03 - Architecture.md",
-    "Templates/session-log.md",
     "06 - Active Issues.md.tmp.20372.d826ccbe14ae",
     "Frontend/05 - Frontend.md",
     "Claude Prompts.md",
-    "Templates/session-log.md.tmp.8948.a36cb812b18c",
     "_context.md",
     "Backend/04 - Backend.md",
     "04 - Backend.md",
@@ -205,10 +216,6 @@
     "Sessions/2026-05-30.md",
     "create a link.md",
     "00 - Index.md",
-    "01 - Project Status.md",
-    "Sessions/README.md",
-    "07 - Decisions Log.md",
-    "06 - Active Issues.md",
-    "05 - Frontend.md"
+    "01 - Project Status.md"
   ]
 }
