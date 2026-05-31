@@ -42,13 +42,10 @@ func (h *AnalyzerHandler) Analyze(c *fiber.Ctx) error {
 		return mapServiceErr(c, err)
 	}
 
-	var parsed map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+	parsed, err := parseAndNormalizeAnalysis(raw)
+	if err != nil {
 		return errResponse(c, fiber.StatusInternalServerError, "failed to parse AI response")
 	}
-
-	// Ensure safe defaults so the frontend never crashes on missing fields.
-	normalizeAnalysis(parsed)
 
 	title, _ := parsed["problem_title"].(string)
 	platform, _ := parsed["platform"].(string)
@@ -73,42 +70,107 @@ func (h *AnalyzerHandler) Analyze(c *fiber.Ctx) error {
 	})
 }
 
-// normalizeAnalysis fills in missing fields with safe zero-values so the
-// frontend can render without null-pointer crashes even if Gemini omits sections.
-func normalizeAnalysis(m map[string]interface{}) {
-	if m["classification"] == nil {
-		m["classification"] = map[string]interface{}{
-			"type": "", "subtype": "", "difficulty_label": "", "confidence": 0.0,
+// parseAndNormalizeAnalysis unmarshals a raw JSON string from the AI, flattens the
+// n8n envelope format, normalizes changed field names, and fills safe defaults.
+//
+// New n8n response shape:
+//   { "analysis": { ...fields... }, "similar_problems": [...] }
+// Old/flat shape:
+//   { "problem_title": "...", "similar_problems": [...], ... }
+// Both are normalized to the flat shape so the frontend doesn't need to branch.
+func parseAndNormalizeAnalysis(raw string) (map[string]interface{}, error) {
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return nil, err
+	}
+
+	// Flatten envelope: if "analysis" key exists, lift its fields to the top level
+	// and merge the top-level "similar_problems" key (which lives outside "analysis").
+	if inner, ok := m["analysis"].(map[string]interface{}); ok {
+		sp := m["similar_problems"] // may be nil
+		for k, v := range inner {
+			m[k] = v
+		}
+		delete(m, "analysis")
+		if sp != nil {
+			m["similar_problems"] = sp
 		}
 	}
+
+	// Normalize hints: new format uses { "level": "easy"|"intermediate"|"advanced", "hint": "..." }
+	// Old format uses { "level": 1|2|3, "text": "..." }
+	// Normalize to always have "text" populated so the frontend uses one field.
+	if aa, ok := m["algorithm_approach"].(map[string]interface{}); ok {
+		if hints, ok := aa["hints"].([]interface{}); ok {
+			for i, h := range hints {
+				if hm, ok := h.(map[string]interface{}); ok {
+					if hm["text"] == nil {
+						if hint, ok := hm["hint"].(string); ok {
+							hm["text"] = hint
+						}
+					}
+					hints[i] = hm
+				}
+			}
+			aa["hints"] = hints
+		}
+	}
+
+	// Normalize complexity: new format splits note into time_note + space_note.
+	// Synthesize a combined "note" for backwards compatibility if it's missing.
+	if cx, ok := m["complexity"].(map[string]interface{}); ok {
+		if cx["note"] == nil || cx["note"] == "" {
+			tn, _ := cx["time_note"].(string)
+			sn, _ := cx["space_note"].(string)
+			switch {
+			case tn != "" && sn != "":
+				cx["note"] = tn + " " + sn
+			case tn != "":
+				cx["note"] = tn
+			case sn != "":
+				cx["note"] = sn
+			default:
+				cx["note"] = ""
+			}
+		}
+	}
+
+	// Safe defaults for required fields.
+	if m["problem_title"] == nil { m["problem_title"] = "Unknown Problem" }
+	if m["platform"] == nil      { m["platform"] = "unknown" }
+
+	if m["classification"] == nil {
+		m["classification"] = map[string]interface{}{"type": "", "subtype": "", "difficulty_label": "", "confidence": 0.0}
+	}
 	if c, ok := m["classification"].(map[string]interface{}); ok {
-		if c["type"] == nil { c["type"] = "" }
-		if c["subtype"] == nil { c["subtype"] = "" }
+		if c["type"] == nil       { c["type"] = "" }
+		if c["subtype"] == nil    { c["subtype"] = "" }
 		if c["difficulty_label"] == nil { c["difficulty_label"] = "" }
 		if c["confidence"] == nil { c["confidence"] = 0.0 }
 	}
+
 	for _, key := range []string{"key_observations", "solution_steps", "common_mistakes", "similar_problems"} {
-		if m[key] == nil {
-			m[key] = []interface{}{}
-		}
+		if m[key] == nil { m[key] = []interface{}{} }
 	}
+
 	if m["algorithm_approach"] == nil {
 		m["algorithm_approach"] = map[string]interface{}{"summary": "", "hints": []interface{}{}}
 	}
 	if a, ok := m["algorithm_approach"].(map[string]interface{}); ok {
 		if a["summary"] == nil { a["summary"] = "" }
-		if a["hints"] == nil { a["hints"] = []interface{}{} }
+		if a["hints"] == nil   { a["hints"] = []interface{}{} }
 	}
+
 	if m["complexity"] == nil {
 		m["complexity"] = map[string]interface{}{"time": "—", "space": "—", "note": ""}
 	}
 	if cx, ok := m["complexity"].(map[string]interface{}); ok {
-		if cx["time"] == nil { cx["time"] = "—" }
+		if cx["time"] == nil  { cx["time"] = "—" }
 		if cx["space"] == nil { cx["space"] = "—" }
-		if cx["note"] == nil { cx["note"] = "" }
+		if cx["note"] == nil  { cx["note"] = "" }
 	}
-	if m["problem_title"] == nil { m["problem_title"] = "Unknown Problem" }
-	if m["platform"] == nil { m["platform"] = "unknown" }
+
+	return m, nil
 }
 
 // ListAnalyses handles GET /analyses.
@@ -151,7 +213,6 @@ func (h *AnalyzerHandler) GetAnalysis(c *fiber.Ctx) error {
 		return errResponse(c, fiber.StatusForbidden, "forbidden")
 	}
 
-	var parsed interface{}
-	_ = json.Unmarshal([]byte(a.AnalysisText), &parsed)
+	parsed, _ := parseAndNormalizeAnalysis(a.AnalysisText)
 	return ok(c, fiber.Map{"id": a.ID, "problem_url": a.ProblemURL, "analysis": parsed, "created_at": a.CreatedAt})
 }

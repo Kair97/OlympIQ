@@ -305,17 +305,23 @@ function RazborPane({ model }: { model: string }) {
             <div className="oq-hints">
               {(r.algorithm_approach?.hints ?? []).map((h, i) => {
                 const open = i < revealedHints
+                // level is "easy"/"intermediate"/"advanced" (new) or 1/2/3 (old)
+                const levelLabel = typeof h.level === 'string'
+                  ? h.level.charAt(0).toUpperCase() + h.level.slice(1)
+                  : `Hint ${h.level}`
+                // text is normalized by backend; hint is fallback for raw passthrough
+                const body = h.text ?? h.hint ?? ''
                 return (
                   <div key={i} className={cx('oq-hint', open && 'is-open')}>
                     <button
                       className="oq-hint-head"
                       onClick={() => setRevealedHints(open ? i : i + 1)}
                     >
-                      <span className="oq-hint-level">Hint {h.level}</span>
+                      <span className="oq-hint-level">{levelLabel}</span>
                       <span className="oq-hint-toggle oq-mono">{open ? '[hide]' : '[reveal]'}</span>
                     </button>
                     <div className="oq-hint-body">
-                      {open ? h.text : <span className="oq-dim oq-mono">{'·'.repeat(48)}</span>}
+                      {open ? body : <span className="oq-dim oq-mono">{'·'.repeat(48)}</span>}
                     </div>
                   </div>
                 )
@@ -357,12 +363,23 @@ function RazborPane({ model }: { model: string }) {
               <div className="oq-cx">
                 <div className="oq-cx-lbl">time</div>
                 <div className="oq-cx-val oq-mono">{r.complexity.time ?? '—'}</div>
+                {r.complexity.time_note && (
+                  <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 3, lineHeight: 1.5 }}>
+                    {r.complexity.time_note}
+                  </div>
+                )}
               </div>
               <div className="oq-cx">
                 <div className="oq-cx-lbl">space</div>
                 <div className="oq-cx-val oq-mono">{r.complexity.space ?? '—'}</div>
+                {r.complexity.space_note && (
+                  <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 3, lineHeight: 1.5 }}>
+                    {r.complexity.space_note}
+                  </div>
+                )}
               </div>
-              {r.complexity.note && (
+              {/* Fallback combined note for old analyses or when time/space notes aren't present */}
+              {r.complexity.note && !r.complexity.time_note && !r.complexity.space_note && (
                 <div className="oq-cx oq-cx-note">{r.complexity.note}</div>
               )}
             </div>
