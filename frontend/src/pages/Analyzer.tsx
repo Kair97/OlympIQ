@@ -517,9 +517,17 @@ function HistorySidebar() {
 
   if (!historyOpen) return null
 
-  const filtered = history.filter(h =>
+  // Skip entries with no meaningful title (failed or incomplete analyses)
+  const valid = history.filter(h =>
+    h.problem_title &&
+    h.problem_title.trim() !== '' &&
+    h.problem_title !== 'Unknown Problem' &&
+    h.problem_title !== 'Unknown'
+  )
+
+  const filtered = valid.filter(h =>
     !historySearch ||
-    (h.problem_title ?? h.problem_url).toLowerCase().includes(historySearch.toLowerCase()) ||
+    h.problem_title!.toLowerCase().includes(historySearch.toLowerCase()) ||
     (h.platform ?? '').toLowerCase().includes(historySearch.toLowerCase())
   )
 
@@ -598,7 +606,7 @@ function HistorySidebar() {
         ))}
         {filtered.length === 0 && (
           <li style={{ color: 'var(--text-faint)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '16px 10px' }}>
-            {history.length === 0 ? 'no analyses yet — analyze your first problem' : 'no matches'}
+            {valid.length === 0 ? 'no analyses yet — analyze your first problem' : 'no matches'}
           </li>
         )}
         {!historySearch && hasMore && filtered.length > 0 && (

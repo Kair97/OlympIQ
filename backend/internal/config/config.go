@@ -24,7 +24,8 @@ type Config struct {
 	N8NAnalyzerURL string
 	N8NRoadmapURL  string
 
-	LeetCodeAPIURL string
+	LeetCodeAPIURL       string
+	LeetCodePublicAPIURL string // used in n8n payloads — must be reachable from the internet
 }
 
 // Load reads all configuration from environment variables with sensible defaults.
@@ -47,7 +48,8 @@ func Load() *Config {
 		N8NAnalyzerURL: os.Getenv("N8N_ANALYZER_URL"),
 		N8NRoadmapURL:  os.Getenv("N8N_ROADMAP_URL"),
 
-		LeetCodeAPIURL: getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
+		LeetCodeAPIURL:       getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
+		LeetCodePublicAPIURL: getEnv("LEETCODE_PUBLIC_API_URL", "https://alfa-leetcode-api.onrender.com"),
 	}
 }
 

@@ -84,7 +84,7 @@ func main() {
 	profileSvc := services.NewProfileService(userRepo, tokenRepo)
 	accountsSvc := services.NewAccountsService(platformRepo, redisCache, cfSvc, lcSvc)
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
-	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
+	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.LeetCodePublicAPIURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
 
 	healthH := handlers.New(db, &redisPinger{client: rdb}, cfg.GeminiModel)
 	authH := handlers.NewAuthHandler(authSvc, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.IsProduction())
