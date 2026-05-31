@@ -3,7 +3,7 @@ import { generateRoadmap, getRoadmap } from '../api/roadmap'
 import { getGoals, upsertGoals } from '../api/profile'
 import { useRoadmapStore } from '../store/roadmapStore'
 import { useStatsStore } from '../store/statsStore'
-import type { WeeklyRoadmap, TopicRoadmap, InterviewRoadmap, RoadmapProblem, UserGoal } from '../types'
+import type { UnifiedRoadmap, RoadmapProblem, RoadmapTopic, RoadmapWeek, RoadmapPattern, UserGoal } from '../types'
 
 type Mode = 'weekly' | 'topic' | 'interview'
 
@@ -45,7 +45,6 @@ function ratingPillClass(rating: number | null, difficulty?: string | null) {
 }
 
 // ── Problem row ───────────────────────────────────────────────────────────────
-
 function ProblemRow({ p }: { p: RoadmapProblem }) {
   return (
     <li className="oq-rm-prob">
@@ -68,9 +67,60 @@ function ProblemRow({ p }: { p: RoadmapProblem }) {
   )
 }
 
-// ── Weekly plan ───────────────────────────────────────────────────────────────
+// ── Summary section ───────────────────────────────────────────────────────────
+function SummarySection({ data }: { data: UnifiedRoadmap['summary'] }) {
+  return (
+    <section className="oq-panel oq-rm-summary" style={{ marginBottom: 20, padding: '18px 22px', gap: 14 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="oq-mono" style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>
+              {data.total_weeks}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>weeks</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div className="oq-mono" style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>
+              {data.estimated_hours}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>hours est.</div>
+          </div>
+        </div>
 
-function WeekItem({ w, defaultOpen }: { w: WeeklyRoadmap['weeks'][0]; defaultOpen: boolean }) {
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="oq-section-label" style={{ marginBottom: 6 }}>focus areas</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {data.focus_areas.map((area, i) => (
+              <span key={i} className="oq-mono" style={{
+                fontSize: 11, padding: '3px 9px', borderRadius: 'var(--radius-sm)',
+                background: 'var(--accent-soft)', color: 'var(--accent-fg)', border: '1px solid var(--accent-soft)',
+              }}>
+                {area}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {data.milestones.length > 0 && (
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div className="oq-section-label" style={{ marginBottom: 6 }}>milestones</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {data.milestones.map((m, i) => (
+                <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, color: 'var(--text-dim)' }}>
+                  <span className="oq-mono" style={{ color: 'var(--accent)', flexShrink: 0, fontSize: 11 }}>W{m.week}</span>
+                  <span>{m.description}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── Weekly plan ───────────────────────────────────────────────────────────────
+function WeekItem({ w, defaultOpen }: { w: RoadmapWeek; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className={cx('oq-rm-week', defaultOpen && 'is-current', open && 'is-open')}>
@@ -97,20 +147,26 @@ function WeekItem({ w, defaultOpen }: { w: WeeklyRoadmap['weeks'][0]; defaultOpe
   )
 }
 
-function WeeklyView({ data }: { data: WeeklyRoadmap }) {
+function WeeklyView({ weeks }: { weeks: RoadmapWeek[] }) {
   return (
     <div className="oq-rm-weeks">
-      {data.weeks.map((w, i) => <WeekItem key={i} w={w} defaultOpen={i === 0} />)}
+      {weeks.map((w, i) => <WeekItem key={i} w={w} defaultOpen={i === 0} />)}
     </div>
   )
 }
 
-// ── By topic ──────────────────────────────────────────────────────────────────
+// ── Strength bar colour ───────────────────────────────────────────────────────
+function strengthColor(score: number) {
+  if (score < 0.33) return 'var(--err)'
+  if (score < 0.66) return 'var(--warn)'
+  return 'var(--ok)'
+}
 
-function TopicView({ data }: { data: TopicRoadmap }) {
+// ── By topic ──────────────────────────────────────────────────────────────────
+function TopicView({ topics }: { topics: RoadmapTopic[] }) {
   return (
     <div className="oq-rm-topics">
-      {data.topics.map((topic, i) => (
+      {topics.map((topic, i) => (
         <div key={i} className="oq-panel oq-rm-topic">
           <div className="oq-rm-topic-head">
             <div>
@@ -119,7 +175,10 @@ function TopicView({ data }: { data: TopicRoadmap }) {
             </div>
             <div className="oq-rm-topic-strength">
               <div className="oq-topic-track">
-                <div className="oq-topic-fill" style={{ width: `${topic.strength_score * 100}%` }} />
+                <div className="oq-topic-fill" style={{
+                  width: `${topic.strength_score * 100}%`,
+                  background: strengthColor(topic.strength_score),
+                }} />
               </div>
               <span className="oq-mono">{Math.round(topic.strength_score * 100)}%</span>
             </div>
@@ -135,8 +194,20 @@ function TopicView({ data }: { data: TopicRoadmap }) {
 }
 
 // ── Interview mode ────────────────────────────────────────────────────────────
+function strengthBadge(s?: string) {
+  if (!s) return null
+  const color = s === 'weak' ? 'var(--err)' : s === 'moderate' ? 'var(--warn)' : 'var(--ok)'
+  return (
+    <span className="oq-mono" style={{
+      fontSize: 10, padding: '2px 7px', borderRadius: 'var(--radius-sm)',
+      background: color + '22', color, border: `1px solid ${color}55`,
+    }}>
+      {s}
+    </span>
+  )
+}
 
-function InterviewView({ data }: { data: InterviewRoadmap }) {
+function InterviewView({ data }: { data: UnifiedRoadmap['interview_mode'] }) {
   return (
     <div className="oq-rm-iv">
       <div className="oq-panel oq-rm-iv-head">
@@ -153,10 +224,18 @@ function InterviewView({ data }: { data: InterviewRoadmap }) {
         </div>
         <button className="oq-btn-primary oq-btn-lg">Start session</button>
       </div>
-      {data.patterns.map((pattern, i) => (
+      {data.patterns.map((pattern: RoadmapPattern, i: number) => (
         <div key={i} className="oq-panel" style={{ gap: 14 }}>
           <div className="oq-panel-head">
-            <h3>{pattern.name}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3>{pattern.name}</h3>
+              {strengthBadge(pattern.user_strength)}
+              {pattern.problems_solved !== undefined && (
+                <span className="oq-mono oq-dim" style={{ fontSize: 11 }}>
+                  {pattern.problems_solved} solved
+                </span>
+              )}
+            </div>
             <span className="oq-mono oq-dim">{Math.round(pattern.frequency * 100)}% frequency</span>
           </div>
           <div className="oq-topic-track" style={{ height: 5 }}>
@@ -172,7 +251,6 @@ function InterviewView({ data }: { data: InterviewRoadmap }) {
 }
 
 // ── Goal editor modal ─────────────────────────────────────────────────────────
-
 const GOAL_OPTS = [
   { id: 'rating',        icon: '↑', label: 'Rating target',   sub: 'Push your Codeforces / LeetCode rating to a number.' },
   { id: 'interview',     icon: '▢', label: 'Interview prep',  sub: 'FAANG-flavoured drills: arrays, DP, graphs.' },
@@ -187,6 +265,7 @@ function GoalEditor({ goal, onClose, onSave }: {
   const [kind, setKind] = useState<UserGoal['goal_type']>(goal?.goal_type ?? 'rating')
   const [target, setTarget] = useState(goal?.target_rating?.toString() ?? '')
   const [date, setDate] = useState(goal?.target_date?.split('T')[0] ?? '')
+  const [weeklyHours, setWeeklyHours] = useState(goal?.weekly_hours?.toString() ?? '15')
   const [notifyDaily, setNotifyDaily] = useState(goal?.notify_daily ?? false)
   const [notifyWeekly, setNotifyWeekly] = useState(goal?.notify_weekly ?? false)
   const [notifyProblems, setNotifyProblems] = useState(goal?.notify_problems ?? false)
@@ -227,6 +306,15 @@ function GoalEditor({ goal, onClose, onSave }: {
               onChange={e => setDate(e.target.value)} />
           </label>
         </div>
+        <div className="oq-form-row">
+          <label>
+            <span className="oq-form-lbl">Weekly study hours</span>
+            <input className="oq-input" style={{ marginTop: 5 }} type="number"
+              min={1} max={168} value={weeklyHours}
+              onChange={e => setWeeklyHours(e.target.value)}
+              placeholder="e.g. 15" />
+          </label>
+        </div>
         <div className="oq-notify-block">
           <div className="oq-section-label">notify me when</div>
           <label className="oq-notify-row">
@@ -258,6 +346,7 @@ function GoalEditor({ goal, onClose, onSave }: {
               goal_type: kind,
               target_rating: target ? parseInt(target) : null,
               target_date: date || null,
+              weekly_hours: weeklyHours ? parseInt(weeklyHours) : 15,
               notify_daily: notifyDaily,
               notify_weekly: notifyWeekly,
               notify_problems: notifyProblems,
@@ -271,7 +360,6 @@ function GoalEditor({ goal, onClose, onSave }: {
 }
 
 // ── Goal card ─────────────────────────────────────────────────────────────────
-
 function GoalCard({ goal }: { goal: UserGoal }) {
   const { notify, setNotify, setEditing } = useRoadmapStore()
   const cfRating = useStatsStore(s => s.cfRating)
@@ -300,8 +388,8 @@ function GoalCard({ goal }: { goal: UserGoal }) {
         <div className="oq-goal-stats">
           <div><span>days left</span><strong>—</strong></div>
           <div><span>pace</span><strong>—/day</strong></div>
+          <div><span>hrs/week</span><strong className="oq-ok">{goal.weekly_hours ?? 15}</strong></div>
           <div><span>target</span><strong className="oq-ok">{target}</strong></div>
-          <div><span>status</span><strong className="oq-ok">on track</strong></div>
         </div>
       </div>
       <div className="oq-goal-card-r">
@@ -331,17 +419,15 @@ function GoalCard({ goal }: { goal: UserGoal }) {
 }
 
 // ── Main Roadmap ──────────────────────────────────────────────────────────────
-
 export default function Roadmap() {
   const store = useRoadmapStore()
 
-  // Load once — skip on revisit because store persists in memory
   useEffect(() => {
     if (store.loaded) return
     async function load() {
       const [rm, g] = await Promise.allSettled([getRoadmap(), getGoals()])
       if (rm.status === 'fulfilled' && rm.value?.roadmap) {
-        store.setRoadmap(rm.value.roadmap, rm.value.mode as Mode)
+        store.setRoadmap(rm.value.roadmap as unknown as UnifiedRoadmap, rm.value.mode as Mode)
       }
       if (g.status === 'fulfilled' && g.value) {
         store.setGoals(g.value)
@@ -360,14 +446,14 @@ export default function Roadmap() {
     store.setGenerating(true)
     store.setGenError('')
     try {
-      const rm = await generateRoadmap(store.mode)
-      store.setRoadmap(rm, store.mode)
+      const rm = await generateRoadmap()
+      store.setRoadmap(rm as unknown as UnifiedRoadmap, 'weekly')
     } catch (e: unknown) {
-      const msg = (e as any)?.response?.data?.error ?? ''
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
       if (msg.includes('quota') || msg.includes('rate'))
-        store.setGenError('AI quota exceeded — update your GEMINI_API_KEY and restart Docker.')
+        store.setGenError('AI quota exceeded — update your API key and restart Docker.')
       else if (msg.includes('parse') || msg.includes('AI'))
-        store.setGenError('AI response error — check GEMINI_API_KEY in .env')
+        store.setGenError('AI response error — check your AI API key in .env')
       else
         store.setGenError('Failed to generate — connect a platform account first, then try again.')
     } finally {
@@ -393,24 +479,23 @@ export default function Roadmap() {
     { id: 'interview', label: 'Interview mode' },
   ]
 
-  const generatedAt = store.roadmap
-    ? new Date((store.roadmap as any).generated_at).toLocaleDateString()
-    : null
+  // Detect unified format (has summary key) vs old single-mode format
+  const unified = store.roadmap as unknown as UnifiedRoadmap | null
+  const isUnified = unified != null && 'summary' in unified
+  const isOldFormat = store.roadmap != null && !isUnified
 
   return (
     <div className="oq-page oq-rm">
       <header className="oq-page-head">
         <div>
-          <div className="oq-page-eyebrow oq-mono">
-            roadmap{generatedAt ? ` · generated ${generatedAt}` : ''}
-          </div>
+          <div className="oq-page-eyebrow oq-mono">roadmap</div>
           <h1 className="oq-page-title">
             {store.goals?.target_rating ? `Path to ${store.goals.target_rating}` : 'Your Roadmap'}
           </h1>
           <p className="oq-page-sub">
             AI rebuilds this plan from your activity and goal.
             <span className="oq-dim">
-              {' '}{store.roadmap ? 'Personalized — one week at a time.' : 'Generate to get started.'}
+              {' '}{store.roadmap ? 'Personalized across weekly, topic, and interview views.' : 'Generate to get started.'}
             </span>
           </p>
         </div>
@@ -445,6 +530,27 @@ export default function Roadmap() {
         </div>
       )}
 
+      {/* Old format banner — prompt user to regenerate */}
+      {store.loaded && isOldFormat && (
+        <div className="oq-panel" style={{
+          padding: '14px 20px', marginBottom: 16, gap: 10,
+          borderColor: 'var(--warn)', display: 'flex', alignItems: 'center',
+        }}>
+          <span style={{ color: 'var(--warn)', fontSize: 13 }}>
+            ↻ Your saved roadmap uses the old format. Regenerate to unlock all three views.
+          </span>
+          <button className="oq-btn-primary" style={{ marginLeft: 'auto', flexShrink: 0 }}
+            onClick={generate} disabled={store.generating}>
+            {store.generating ? 'Generating…' : 'Regenerate now'}
+          </button>
+        </div>
+      )}
+
+      {/* Summary strip — only for unified roadmaps */}
+      {isUnified && unified.summary && (
+        <SummarySection data={unified.summary} />
+      )}
+
       <div className="oq-mode-tabs">
         {tabs.map(t => (
           <button key={t.id}
@@ -454,7 +560,6 @@ export default function Roadmap() {
           </button>
         ))}
         <div className="oq-mode-spacer" />
-        <span className="oq-mono oq-dim" style={{ fontSize: 11, padding: '0 12px' }}>gemini-2.0-flash</span>
       </div>
 
       {!store.loaded && <RoadmapSkeleton />}
@@ -473,28 +578,15 @@ export default function Roadmap() {
         </div>
       )}
 
-      {store.loaded && store.roadmap && store.mode === 'weekly' && store.roadmap.mode === 'weekly' && (
-        <WeeklyView data={store.roadmap as WeeklyRoadmap} />
+      {/* Unified roadmap views */}
+      {store.loaded && isUnified && store.mode === 'weekly' && unified.weekly_mode?.weeks && (
+        <WeeklyView weeks={unified.weekly_mode.weeks} />
       )}
-      {store.loaded && store.roadmap && store.mode === 'topic' && store.roadmap.mode === 'topic' && (
-        <TopicView data={store.roadmap as TopicRoadmap} />
+      {store.loaded && isUnified && store.mode === 'topic' && unified.topic_mode?.topics && (
+        <TopicView topics={unified.topic_mode.topics} />
       )}
-      {store.loaded && store.roadmap && store.mode === 'interview' && store.roadmap.mode === 'interview' && (
-        <InterviewView data={store.roadmap as InterviewRoadmap} />
-      )}
-      {store.loaded && store.roadmap && store.roadmap.mode !== store.mode && (
-        <div className="oq-panel" style={{ padding: '3rem 2rem', textAlign: 'center', alignItems: 'center', gap: 14 }}>
-          <div style={{ fontSize: 24, color: 'var(--accent)' }}>↗</div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>No {store.mode} roadmap yet</div>
-          <div style={{ color: 'var(--text-dim)', maxWidth: '44ch', fontSize: 13 }}>
-            Your saved roadmap is in <strong>{store.roadmap.mode}</strong> mode.
-            Generate a fresh one for <strong>{store.mode}</strong>.
-          </div>
-          <button className="oq-btn-primary oq-btn-lg" style={{ marginTop: 8 }}
-            onClick={generate} disabled={store.generating}>
-            {store.generating ? 'Generating…' : `✦ Generate ${store.mode} roadmap`}
-          </button>
-        </div>
+      {store.loaded && isUnified && store.mode === 'interview' && unified.interview_mode && (
+        <InterviewView data={unified.interview_mode} />
       )}
 
       {store.editing && (

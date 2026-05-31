@@ -23,24 +23,24 @@ type pgGoalsRepo struct{ db *pgxpool.Pool }
 func NewGoalsRepo(db *pgxpool.Pool) GoalsRepository { return &pgGoalsRepo{db: db} }
 
 func (r *pgGoalsRepo) Upsert(ctx context.Context, g *models.UserGoal) error {
-	q := `INSERT INTO user_goals (id, user_id, goal_type, target_rating, target_date, notify_daily, notify_weekly, notify_problems, created_at, updated_at)
-	      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	q := `INSERT INTO user_goals (id, user_id, goal_type, target_rating, target_date, weekly_hours, notify_daily, notify_weekly, notify_problems, created_at, updated_at)
+	      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 	      ON CONFLICT (user_id) DO UPDATE SET
-	        goal_type=$3, target_rating=$4, target_date=$5,
-	        notify_daily=$6, notify_weekly=$7, notify_problems=$8, updated_at=$10`
+	        goal_type=$3, target_rating=$4, target_date=$5, weekly_hours=$6,
+	        notify_daily=$7, notify_weekly=$8, notify_problems=$9, updated_at=$11`
 	_, err := r.db.Exec(ctx, q,
-		g.ID, g.UserID, g.GoalType, g.TargetRating, g.TargetDate,
+		g.ID, g.UserID, g.GoalType, g.TargetRating, g.TargetDate, g.WeeklyHours,
 		g.NotifyDaily, g.NotifyWeekly, g.NotifyProblems, g.CreatedAt, g.UpdatedAt,
 	)
 	return err
 }
 
 func (r *pgGoalsRepo) FindByUserID(ctx context.Context, userID uuid.UUID) (*models.UserGoal, error) {
-	q := `SELECT id, user_id, goal_type, target_rating, target_date, notify_daily, notify_weekly, notify_problems, created_at, updated_at
+	q := `SELECT id, user_id, goal_type, target_rating, target_date, weekly_hours, notify_daily, notify_weekly, notify_problems, created_at, updated_at
 	      FROM user_goals WHERE user_id=$1`
 	var g models.UserGoal
 	err := r.db.QueryRow(ctx, q, userID).Scan(
-		&g.ID, &g.UserID, &g.GoalType, &g.TargetRating, &g.TargetDate,
+		&g.ID, &g.UserID, &g.GoalType, &g.TargetRating, &g.TargetDate, &g.WeeklyHours,
 		&g.NotifyDaily, &g.NotifyWeekly, &g.NotifyProblems, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
