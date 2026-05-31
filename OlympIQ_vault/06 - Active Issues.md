@@ -85,6 +85,9 @@ last_updated: 2026-05-31
 
 ## Watch List
 
+- **n8n analyzer envelope** — response is `{ "analysis": {...}, "similar_problems": [...] }`. Backend `parseAndNormalizeAnalysis` flattens it. If future n8n changes break envelope, check `analyzer.go` first.
+- **Hint schema** — new hints: `{ "level": "easy"|"intermediate"|"advanced", "hint": "..." }`. Backend normalizes `hint→text`. Frontend reads `h.text ?? h.hint`. Old stored analyses have `{ "level": 1|2|3, "text": "..." }` — both work.
+- **Complexity schema** — new: `time_note` + `space_note` separate fields. Backend synthesizes `note` from them. Frontend shows both separately if present.
 - AI responses: always strip markdown fences before parsing JSON (already fixed, but fragile)
 - `buildStudentContext` reads from Redis; if cache is cold (first sync), AI calls may have sparse data
 - TypeScript strict mode — no `any` types; watch for implicit any in new components

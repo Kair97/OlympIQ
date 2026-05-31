@@ -71,7 +71,19 @@ function ProblemRow({ p }: { p: RoadmapProblem }) {
 function SummarySection({ data }: { data: UnifiedRoadmap['summary'] }) {
   return (
     <section className="oq-panel oq-rm-summary" style={{ marginBottom: 20, padding: '18px 22px', gap: 14 }}>
+      {/* current_level callout */}
+      {data.current_level && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5,
+          padding: '8px 12px', background: 'var(--bg-sunken)',
+          borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent)',
+        }}>
+          {data.current_level}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
+        {/* Stats */}
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={{ textAlign: 'center' }}>
             <div className="oq-mono" style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>
@@ -85,8 +97,20 @@ function SummarySection({ data }: { data: UnifiedRoadmap['summary'] }) {
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>hours est.</div>
           </div>
+          {/* platform_balance */}
+          {data.platform_balance && (
+            <div style={{ textAlign: 'center' }}>
+              <div className="oq-mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--accent-2)' }}>
+                {data.platform_balance.leetcode_percentage}%
+                <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> / </span>
+                {data.platform_balance.codeforces_percentage}%
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>LC / CF</div>
+            </div>
+          )}
         </div>
 
+        {/* Focus areas */}
         <div style={{ flex: 1, minWidth: 200 }}>
           <div className="oq-section-label" style={{ marginBottom: 6 }}>focus areas</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -99,8 +123,15 @@ function SummarySection({ data }: { data: UnifiedRoadmap['summary'] }) {
               </span>
             ))}
           </div>
+          {/* platform_balance note */}
+          {data.platform_balance?.note && (
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, fontStyle: 'italic' }}>
+              {data.platform_balance.note}
+            </div>
+          )}
         </div>
 
+        {/* Milestones — support both old "description" and new "goal" field */}
         {data.milestones.length > 0 && (
           <div style={{ flex: 1, minWidth: 200 }}>
             <div className="oq-section-label" style={{ marginBottom: 6 }}>milestones</div>
@@ -108,7 +139,7 @@ function SummarySection({ data }: { data: UnifiedRoadmap['summary'] }) {
               {data.milestones.map((m, i) => (
                 <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, color: 'var(--text-dim)' }}>
                   <span className="oq-mono" style={{ color: 'var(--accent)', flexShrink: 0, fontSize: 11 }}>W{m.week}</span>
-                  <span>{m.description}</span>
+                  <span>{m.goal ?? m.description}</span>
                 </li>
               ))}
             </ul>
@@ -128,7 +159,14 @@ function WeekItem({ w, defaultOpen }: { w: RoadmapWeek; defaultOpen: boolean }) 
         <div className="oq-rm-week-idx oq-mono">W{String(w.week).padStart(2, '0')}</div>
         <div>
           <div className="oq-rm-week-theme">{w.theme}</div>
-          <div className="oq-rm-week-meta">{w.focus_topics.slice(0, 3).join(' · ')}</div>
+          <div className="oq-rm-week-meta">
+            {w.focus_topics.slice(0, 3).join(' · ')}
+            {w.difficulty_target && (
+              <span className="oq-mono" style={{ marginLeft: 8, fontSize: 10, color: 'var(--text-faint)' }}>
+                {w.difficulty_target}
+              </span>
+            )}
+          </div>
         </div>
         <div className="oq-rm-week-track">
           <div className="oq-rm-week-fill" style={{ width: defaultOpen ? '40%' : '0%' }} />
@@ -169,9 +207,22 @@ function TopicView({ topics }: { topics: RoadmapTopic[] }) {
       {topics.map((topic, i) => (
         <div key={i} className="oq-panel oq-rm-topic">
           <div className="oq-rm-topic-head">
-            <div>
+            <div style={{ flex: 1 }}>
               <h4 className="oq-rm-topic-name">{topic.name}</h4>
               <div className="oq-rm-topic-why">{topic.why}</div>
+              {topic.sub_patterns_covered && topic.sub_patterns_covered.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                  {topic.sub_patterns_covered.map((sp, si) => (
+                    <span key={si} className="oq-mono" style={{
+                      fontSize: 10, padding: '2px 7px', borderRadius: 'var(--radius-sm)',
+                      background: 'var(--bg-elev)', color: 'var(--text-faint)',
+                      border: '1px solid var(--line)',
+                    }}>
+                      {sp}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="oq-rm-topic-strength">
               <div className="oq-topic-track">
@@ -218,6 +269,26 @@ function InterviewView({ data }: { data: UnifiedRoadmap['interview_mode'] }) {
           <h3 className="oq-rm-iv-title">
             {data.patterns.reduce((n, p) => n + p.problems.length, 0)} problems · {data.patterns.length} patterns
           </h3>
+          {data.readiness_score != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                FAANG readiness
+              </span>
+              <div style={{ flex: 1, maxWidth: 160, height: 6, background: 'var(--bg-elev)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${data.readiness_score * 100}%`,
+                  background: data.readiness_score < 0.33 ? 'var(--err)'
+                    : data.readiness_score < 0.66 ? 'var(--warn)'
+                    : 'var(--ok)',
+                  borderRadius: 3,
+                }} />
+              </div>
+              <span className="oq-mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                {Math.round(data.readiness_score * 100)}%
+              </span>
+            </div>
+          )}
           <p className="oq-rm-iv-sub">
             Patterns mixed across difficulty — recall, speed, and one new concept per session.
           </p>
@@ -508,6 +579,27 @@ export default function Roadmap() {
       </header>
 
       {store.goals && <GoalCard goal={store.goals} />}
+
+      {/* Prominent generating banner — shown whenever AI is working */}
+      {store.generating && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '16px 22px', marginBottom: 16,
+          background: 'var(--accent-soft)',
+          border: '1px solid oklch(0.72 0.16 305 / 0.35)',
+          borderRadius: 'var(--radius)',
+        }}>
+          <span style={{ fontSize: 20, color: 'var(--accent)', animation: 'spin 1.2s linear infinite' }}>◇</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--accent-fg)' }}>
+              Generating your roadmap…
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+              AI is analyzing your stats and building a personalized plan. This takes 15–60 seconds.
+            </div>
+          </div>
+        </div>
+      )}
 
       {store.loaded && !store.goals && (
         <div className="oq-panel" style={{ padding: '22px 26px', marginBottom: 24, gap: 10 }}>
