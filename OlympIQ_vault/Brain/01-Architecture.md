@@ -163,3 +163,9 @@ The key decision: n8n allows swapping AI models without redeploying the backend.
 [{"output": "{...json string...}"}]
 ```
 The backend `callN8NAnalyzer` and `callN8NRoadmap` functions try multiple key names (`output`, `json`, `text`, `result`, `analysis`) and handle both quoted-string values and raw JSON object values.
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[03 - Architecture]] · [[02-Backend-Deep]] · [[03-Database]] · [[04-Frontend-Deep]] · [[05-n8n-Agents]]

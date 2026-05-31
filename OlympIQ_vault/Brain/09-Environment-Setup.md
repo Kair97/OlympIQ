@@ -284,3 +284,9 @@ Check: TypeScript compilation error, missing env vars in Vite config.
 ### LeetCode sync returns 502
 - alfa-leetcode-api not responding: `curl http://localhost:3002/tourist/profile`
 - Container restarting: `docker-compose logs leetcode-api --tail 20`
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[_context]] · [[03 - Architecture]] · [[08-Security]] · [[02-Backend-Deep]]

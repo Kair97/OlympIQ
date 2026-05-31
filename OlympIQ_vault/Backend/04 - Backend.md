@@ -87,3 +87,9 @@ return c.JSON(fiber.Map{"success": true, "data": result, "error": nil})
 ```go
 return c.Status(400).JSON(fiber.Map{"success": false, "data": nil, "error": "message"})
 ```
+
+---
+
+## Related notes
+
+[[03 - Architecture]] · [[Codeforces API Reference]] · [[LeetCode alfa-leetcode-api Reference]] · [[02-Backend-Deep]] · [[06-Errors-Bible]] · [[03-Database]] · [[05-n8n-Agents]] · [[06 - Active Issues]]

@@ -312,3 +312,9 @@ Content-Type: application/json
 
 {"problem_url": "https://codeforces.com/contest/1842/problem/B"}
 ```
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[02-Backend-Deep]] · [[06 - Active Issues]] · [[06-Errors-Bible]] · [[07-Testing-Guide]]

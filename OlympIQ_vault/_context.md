@@ -12,6 +12,8 @@ last_updated: 2026-05-30
 
 **Step 18 of 22 — Analyzer page (backend + frontend in-progress)**
 
+> See [[01 - Project Status]] for full breakdown · [[02 - Build Checklist]] for all 22 steps · [[06 - Active Issues]] for blockers
+
 ## Modified files (uncommitted)
 
 | File | Note |
@@ -62,3 +64,9 @@ docker-compose up --build                          # start all services
 docker-compose exec backend ./migrate up           # run migrations
 docker-compose exec backend go test ./... -v       # run backend tests
 ```
+
+---
+
+## Related notes
+
+[[00 - Index]] · [[01 - Project Status]] · [[02 - Build Checklist]] · [[06 - Active Issues]] · [[07 - Decisions Log]] · [[00-Master-Context]] · [[09-Environment-Setup]]

@@ -73,3 +73,9 @@ last_updated: 2026-05-31
 4. Step 20 — Nginx production config + TLS setup
 5. Step 21 — Prometheus metrics + Grafana dashboard
 6. Step 22 — README + architecture diagram
+
+---
+
+## Related notes
+
+[[_context]] · [[02 - Build Checklist]] · [[06 - Active Issues]] · [[00-Master-Context]] · [[Sessions/README]]

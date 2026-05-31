@@ -289,3 +289,9 @@ After loading if user exists: renders `<Sidebar> + <main><Outlet/></main> + <Sta
 5. On error: `setGenError(message)`
 
 **Problem rows:** Each `ProblemRow` renders `<a href={p.url} target="_blank">Open ↗</a>` — always an external link. No internal routing for problems.
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[05 - Frontend]] · [[02-Backend-Deep]] · [[03 - Architecture]] · [[06-Errors-Bible]]

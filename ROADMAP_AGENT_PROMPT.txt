@@ -1,0 +1,440 @@
+====================================================================
+OLYMPIQ — ROADMAP FEATURE: FULL STATS PAYLOAD + ROADMAP RENDERING
+====================================================================
+
+You are an expert Go + React/TypeScript engineer working on OlympIQ,
+an AI-powered competitive programming training platform.
+
+Read OlympIQ_vault/Brain/00-Master-Context.md and
+OlympIQ_vault/06 - Active Issues.md before touching any file.
+
+--------------------------------------------------------------------
+WHAT THIS TASK IS
+--------------------------------------------------------------------
+
+The app already collects Codeforces and LeetCode stats and sends them
+to an n8n AI agent via POST. The agent returns a roadmap JSON.
+
+This task has FOUR parts:
+
+  1. Add weekly_hours to the UserGoal model + DB migration
+  2. Update the n8n payload to send ALL stats correctly (including
+     per-topic counts, weekly_hours from goals, and ALL three modes
+     at once so the agent returns one unified roadmap JSON)
+  3. Update the frontend GoalModal to capture weekly_hours
+  4. Update Roadmap.tsx to render the new unified roadmap JSON
+     (summary + topic_mode + weekly_mode + interview_mode)
+
+--------------------------------------------------------------------
+PART 1 — BACKEND: ADD weekly_hours TO UserGoal
+--------------------------------------------------------------------
+
+FILE: backend/internal/models/goals.go
+
+The current UserGoal struct is:
+
+  type UserGoal struct {
+    ID             uuid.UUID
+    UserID         uuid.UUID
+    GoalType       string
+    TargetRating   *int
+    TargetDate     *time.Time
+    NotifyDaily    bool
+    NotifyWeekly   bool
+    NotifyProblems bool
+    CreatedAt      time.Time
+    UpdatedAt      time.Time
+  }
+
+ADD one field:
+
+  WeeklyHours *int `json:"weekly_hours"`
+
+FILE: backend/db/migrations/009_add_weekly_hours_to_user_goals.up.sql
+
+CREATE:
+
+  ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_hours INT;
+
+FILE: backend/db/migrations/009_add_weekly_hours_to_user_goals.down.sql
+
+CREATE:
+
+  ALTER TABLE user_goals DROP COLUMN IF EXISTS weekly_hours;
+
+FILE: backend/internal/repository/goals_repo.go
+
+Update the INSERT/UPDATE SQL and the scan in FindByUserID to include
+weekly_hours. The upsert query must include weekly_hours in both the
+INSERT column list and the ON CONFLICT DO UPDATE SET clause.
+
+FILE: backend/internal/handlers/roadmap.go (or whichever handler
+handles PUT /goals)
+
+The PUT /goals handler binds a request body. Add weekly_hours to the
+binding struct and pass it through to the repository.
+
+--------------------------------------------------------------------
+PART 2 — BACKEND: UPDATE THE N8N PAYLOAD
+--------------------------------------------------------------------
+
+FILE: backend/internal/services/ai_service.go
+
+FUNCTION: callN8NRoadmap
+
+CURRENT BEHAVIOR: sends one mode ("weekly" | "topic" | "interview")
+and weekly_hours is hardcoded to 15.
+
+NEW BEHAVIOR:
+  - weekly_hours must come from sc.Goals.WeeklyHours (default 15 if nil)
+  - The mode field in the payload should be "all" — this tells the
+    n8n agent to return all three modes (topic_mode, weekly_mode,
+    interview_mode) in one unified JSON response
+  - Keep all existing CF + LC fields exactly as they are
+
+The EXACT payload shape the n8n agent expects is:
+
+  {
+    "username":     "alex_coder_2024",
+    "mode":         "all",
+    "weekly_hours": 15,
+    "codeforces": {
+      "rating":         1450,
+      "rank":           "specialist",
+      "problems_solved": 89,
+      "topics": {
+        "Greedy":              24,
+        "Implementation":      31,
+        "Math":                18,
+        "Dynamic Programming":  5,
+        "Graph":                7,
+        "Number Theory":        4
+      },
+      "rating_history": [1100, 1180, 1250, 1310, 1380, 1420, 1450]
+    },
+    "leetcode": {
+      "total_solved": 247,
+      "easy":          98,
+      "medium":       132,
+      "hard":          17,
+      "topics": {
+        "Array":              45,
+        "String":             38,
+        "Hash Table":         42,
+        "Dynamic Programming": 8,
+        "Tree":               28,
+        "Graph":              12,
+        "Binary Search":      22,
+        "Two Pointers":       31,
+        "Sliding Window":     15,
+        "Backtracking":        6,
+        "Heap":                4
+      }
+    },
+    "goal":     "FAANG Software Engineer",
+    "deadline": "2025-09-01"
+  }
+
+NOTE: The "topics" map for Codeforces comes from sc.CFTagFreq
+(map[string]int, built from verdict=="OK" submissions → tag counts).
+The "topics" map for LeetCode comes from sc.LCTopics
+(map[string]int, built from the /skill endpoint tiers).
+Both are already populated in BuildStudentContext — do not change
+that function. Only change the payload assembly in callN8NRoadmap.
+
+ALSO UPDATE: The GenerateRoadmap function currently passes mode as a
+string from the HTTP request. Change it so mode is always sent as
+"all" to the n8n agent. The frontend mode selector (weekly/topic/
+interview) now controls which section of the RESPONSE to display,
+not which mode is requested from the agent.
+
+--------------------------------------------------------------------
+PART 3 — BACKEND: UPDATE ROADMAP STORAGE AND RESPONSE
+--------------------------------------------------------------------
+
+The n8n agent will return one large JSON object with this structure:
+
+  {
+    "summary": {
+      "total_weeks":      52,
+      "estimated_hours":  780,
+      "focus_areas":      ["Dynamic Programming", "Graph", "Tree"],
+      "milestones": [
+        { "week": 2, "description": "Complete all easy DP problems" },
+        { "week": 5, "description": "Reach 1600 CF rating"         }
+      ]
+    },
+    "topic_mode": {
+      "generated_at": "2023-10-08T00:00:00Z",
+      "goal_summary": "string",
+      "topics": [
+        {
+          "name":           "Dynamic Programming",
+          "why":            "You solved only 5 DP problems...",
+          "strength_score": 0.25,
+          "problems": [
+            {
+              "title":      "Climbing Stairs",
+              "platform":   "leetcode",
+              "url":        "https://leetcode.com/problems/climbing-stairs/",
+              "rating":     null,
+              "difficulty": "easy",
+              "tags":       ["dynamic programming"],
+              "reason":     "Begin with a basic DP problem..."
+            }
+          ]
+        }
+      ]
+    },
+    "weekly_mode": {
+      "generated_at": "2023-10-08T00:00:00Z",
+      "goal_summary": "string",
+      "weeks": [
+        {
+          "week":         1,
+          "theme":        "Foundation: Dynamic Programming",
+          "focus_topics": ["Dynamic Programming"],
+          "problems":     [ ...same problem shape... ]
+        }
+      ]
+    },
+    "interview_mode": {
+      "generated_at":     "2023-10-08T00:00:00Z",
+      "target_companies": ["FAANG"],
+      "patterns": [
+        {
+          "name":            "Dynamic Programming",
+          "frequency":       1.0,
+          "user_strength":   "weak",
+          "problems_solved": 5,
+          "problems":        [ ...same problem shape... ]
+        }
+      ]
+    }
+  }
+
+The roadmaps table stores content JSONB. The current handler already
+stores whatever string the AI returns. No change needed to storage —
+the full JSON is stored as-is and returned as-is to the frontend.
+
+Make sure the GET /roadmap endpoint returns the raw content field
+without modification. The frontend handles parsing.
+
+--------------------------------------------------------------------
+PART 4 — FRONTEND: UPDATE GoalModal TO CAPTURE weekly_hours
+--------------------------------------------------------------------
+
+FILE: frontend/src/types/index.ts (or wherever UserGoal type lives)
+
+Add to the UserGoal interface:
+
+  weekly_hours?: number | null
+
+FILE: frontend/src/pages/Profile.tsx (or the GoalModal component)
+
+The goals form currently has: goal_type, target_rating, target_date,
+notify_daily, notify_weekly, notify_problems.
+
+ADD a numeric input for weekly_hours:
+
+  Label:       "Weekly study hours"
+  Input type:  number
+  Min:         1
+  Max:         168
+  Placeholder: "e.g. 15"
+  Default:     15
+
+Wire it to the upsertGoals API call. Include weekly_hours in the
+request body sent to PUT /goals.
+
+--------------------------------------------------------------------
+PART 5 — FRONTEND: UPDATE Roadmap.tsx TO RENDER THE UNIFIED JSON
+--------------------------------------------------------------------
+
+FILE: frontend/src/pages/Roadmap.tsx
+
+CURRENT STATE:
+  - Fetches roadmap JSON from GET /roadmap
+  - Parses it expecting either weekly_mode, topic_mode, or
+    interview_mode at the top level
+  - Mode tabs switch which view to show
+
+NEW STATE:
+  - The stored roadmap JSON now has the unified shape described above
+    (summary + topic_mode + weekly_mode + interview_mode)
+  - Mode tabs still exist but now switch between sections of the
+    SAME stored JSON
+  - Add a new Summary section at the top of the page (always visible,
+    above the mode tabs)
+
+FILE: frontend/src/types/index.ts
+
+Add these TypeScript interfaces (or update existing ones):
+
+  interface RoadmapSummary {
+    total_weeks:      number
+    estimated_hours:  number
+    focus_areas:      string[]
+    milestones:       Array<{ week: number; description: string }>
+  }
+
+  interface RoadmapProblem {
+    title:      string
+    platform:   string
+    url:        string
+    rating:     number | null
+    difficulty: string | null
+    tags:       string[]
+    reason:     string
+  }
+
+  interface TopicSection {
+    name:           string
+    why:            string
+    strength_score: number
+    problems:       RoadmapProblem[]
+  }
+
+  interface WeekSection {
+    week:         number
+    theme:        string
+    focus_topics: string[]
+    problems:     RoadmapProblem[]
+  }
+
+  interface InterviewPattern {
+    name:            string
+    frequency:       number
+    user_strength:   string
+    problems_solved: number
+    problems:        RoadmapProblem[]
+  }
+
+  interface UnifiedRoadmap {
+    summary:        RoadmapSummary
+    topic_mode:     { generated_at: string; goal_summary: string; topics:   TopicSection[]     }
+    weekly_mode:    { generated_at: string; goal_summary: string; weeks:    WeekSection[]       }
+    interview_mode: { generated_at: string; target_companies: string[]; patterns: InterviewPattern[] }
+  }
+
+SUMMARY SECTION (render above mode tabs):
+
+  A panel showing:
+  - "Total weeks: {summary.total_weeks}"
+  - "Estimated hours: {summary.estimated_hours}"
+  - Focus areas as pills: {summary.focus_areas.map(area => <span>)}
+  - Milestones as a small list:
+      Week {m.week}: {m.description}
+
+  Style: use var(--panel), var(--accent), var(--text-dim).
+  Keep it compact — single row on wide screens, stacked on narrow.
+
+TOPIC MODE (roadmap.topic_mode.topics):
+
+  For each topic:
+  - Topic name as section header
+  - "why" text in var(--text-dim)
+  - Strength bar: width = strength_score * 100%,
+    colour = lerp from var(--err) at 0.0 to var(--ok) at 1.0
+    Use inline style: oklch values — low=red, mid=warn, high=ok
+  - Problem list (same ProblemRow component already in the file)
+
+WEEKLY MODE (roadmap.weekly_mode.weeks):
+
+  Same as current weekly rendering. Each week is a collapsible
+  accordion showing: week number, theme, focus_topics as pills,
+  progress bar placeholder, then problem rows.
+
+INTERVIEW MODE (roadmap.interview_mode.patterns):
+
+  For each pattern:
+  - Pattern name + frequency bar (frequency * 100% width)
+  - user_strength badge: "weak" = var(--err), "moderate" = var(--warn),
+    "good" = var(--ok)
+  - problems_solved count
+  - Problem list (same ProblemRow)
+
+GENERATE BUTTON BEHAVIOR:
+
+  When the user clicks "Generate Roadmap", POST /roadmap/generate
+  with body { "mode": "all" }. On success, parse and store the
+  full unified JSON. All three mode tabs become available immediately.
+
+  If the stored roadmap was generated with the old format (no
+  "summary" key), show a "Regenerate" banner prompting the user
+  to regenerate.
+
+--------------------------------------------------------------------
+PART 6 — API LAYER UPDATES
+--------------------------------------------------------------------
+
+FILE: frontend/src/api/roadmap.ts
+
+The generateRoadmap function should always send mode: "all":
+
+  export async function generateRoadmap() {
+    const res = await client.post('/roadmap/generate', { mode: 'all' })
+    return res.data
+  }
+
+The getRoadmap function returns the raw content — parse it as
+UnifiedRoadmap in the component, not in the API layer.
+
+--------------------------------------------------------------------
+EXECUTION ORDER
+--------------------------------------------------------------------
+
+Execute in this exact order. Verify each step compiles before moving
+to the next.
+
+  1. models/goals.go           — add WeeklyHours field
+  2. goals_repo.go             — update SQL to include weekly_hours
+  3. Migration 009             — create up + down SQL files
+  4. Goals handler             — accept weekly_hours in PUT /goals body
+  5. ai_service.go             — update callN8NRoadmap payload
+     - mode always "all"
+     - weekly_hours from sc.Goals.WeeklyHours (default 15)
+     - verify CF topics and LC topics maps are included
+  6. types/index.ts            — add all new interfaces
+  7. Profile.tsx / GoalModal   — add weekly_hours input field
+  8. api/roadmap.ts            — hardcode mode: "all"
+  9. Roadmap.tsx               — add Summary section, update all three
+                                 mode renderers to use unified JSON
+
+--------------------------------------------------------------------
+CONSTRAINTS — DO NOT VIOLATE
+--------------------------------------------------------------------
+
+- No code editor anywhere in the app. Analyzer page is read-only.
+  This task does not touch the Analyzer.
+- All "Solve" buttons must be <a href="..." target="_blank"> links.
+  Never <button onClick={navigate(...)}>
+- TypeScript strict mode. No `any` types.
+- All Go errors from external calls must be wrapped with ErrExternal.
+- Do not change BuildStudentContext — it already populates CFTagFreq
+  and LCTopics correctly.
+- Do not change the Codeforces or LeetCode service files.
+- Run `go build ./...` in backend/ after each Go file change.
+  Fix all compiler errors before moving to the next file.
+- Run `npm run build` in frontend/ after all TSX changes.
+  Fix all TypeScript errors before declaring done.
+
+--------------------------------------------------------------------
+VAULT PROTOCOL — MANDATORY AFTER FINISHING
+--------------------------------------------------------------------
+
+After completing all changes, update the vault:
+
+  OlympIQ_vault/01 - Project Status.md
+    — mark weekly_hours, unified payload, and Roadmap rendering done
+
+  OlympIQ_vault/06 - Active Issues.md
+    — remove any roadmap-related in-progress items
+    — add any new gotchas discovered
+
+  OlympIQ_vault/Sessions/README.md
+    — append a bullet: date, what was done, what's next
+
+====================================================================
+END OF PROMPT
+====================================================================

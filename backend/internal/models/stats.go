@@ -44,10 +44,11 @@ type CodeforcesRatingChange struct {
 
 // CodeforcesSubmission holds one submission from CF user.status.
 type CodeforcesSubmission struct {
-	ID                  int64              `json:"id"`
-	CreationTimeSeconds int64              `json:"creationTimeSeconds"`
-	Problem             CodeforcesProblem  `json:"problem"`
-	Verdict             string             `json:"verdict"`
+	ID                  int64             `json:"id"`
+	CreationTimeSeconds int64             `json:"creationTimeSeconds"`
+	Problem             CodeforcesProblem `json:"problem"`
+	Verdict             string            `json:"verdict"`
+	ProgrammingLanguage string            `json:"programmingLanguage"`
 }
 
 // CodeforcesProblem is the nested problem object inside a CF submission.
@@ -94,6 +95,12 @@ type LeetCodeSkillTag struct {
 	ProblemsSolved int    `json:"problemsSolved"`
 }
 
+// LeetCodeLanguageStat is one language entry from /{username}/languageStats.
+type LeetCodeLanguageStat struct {
+	LanguageName   string `json:"languageName"`
+	ProblemsSolved int    `json:"problemsSolved"`
+}
+
 // LeetCodeSkill holds the full skill breakdown from /{username}/skill.
 type LeetCodeSkill struct {
 	Data struct {
@@ -101,4 +108,36 @@ type LeetCodeSkill struct {
 		Intermediate []LeetCodeSkillTag `json:"intermediate"`
 		Fundamental  []LeetCodeSkillTag `json:"fundamental"`
 	} `json:"data"`
+}
+
+// LeetCodeContestEntry is one contest from /{username}/contest/history.
+type LeetCodeContestEntry struct {
+	Attended       bool    `json:"attended"`
+	TrendDirection string  `json:"trendDirection"`
+	ProblemsSolved int     `json:"problemsSolved"`
+	TotalProblems  int     `json:"totalProblems"`
+	Rating         float64 `json:"rating"`
+	Ranking        int     `json:"ranking"`
+	Contest        struct {
+		Title     string `json:"title"`
+		StartTime int64  `json:"startTime"`
+	} `json:"contest"`
+}
+
+// CFRecentProblem is a lightweight recent accepted CF problem for the dashboard.
+type CFRecentProblem struct {
+	Name      string   `json:"name"`
+	ContestID int      `json:"contestId"`
+	Index     string   `json:"index"`
+	Rating    *int     `json:"rating"`
+	Tags      []string `json:"tags"`
+	SolvedAt  int64    `json:"solved_at"`
+}
+
+// LCRecentProblem is a recent accepted LC problem for the dashboard.
+type LCRecentProblem struct {
+	Title     string `json:"title"`
+	TitleSlug string `json:"titleSlug"`
+	SolvedAt  int64  `json:"solved_at"`
+	Lang      string `json:"lang"`
 }

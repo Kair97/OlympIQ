@@ -295,3 +295,9 @@ type StudentContext struct {
    - `lc.GetAcSubmissions` → LCSolvedSlugs
    - `lc.GetSkill` → build LCTopics map; populate LCWeakTopics (< 5 solved)
 4. `goals.FindByUserID` → Goals (nil if not set)
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[04 - Backend]] · [[03-Database]] · [[06-Errors-Bible]] · [[Codeforces API Reference]] · [[LeetCode alfa-leetcode-api Reference]] · [[05-n8n-Agents]] · [[08-Security]]

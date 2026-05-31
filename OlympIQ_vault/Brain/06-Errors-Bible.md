@@ -324,3 +324,9 @@ last_updated: 2026-05-31
 - **When:** `GEMINI_MODEL` set to a model not available on `v1beta` endpoint
 - **Root cause:** `geminiBaseURL` uses `v1beta`; some models may only be available on `v1`
 - **Fix:** Change `GEMINI_MODEL` to `gemini-2.0-flash` (confirmed working). Or switch from `v1beta` to `v1` in `geminiBaseURL` constant.
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[06 - Active Issues]] · [[04 - Backend]] · [[02-Backend-Deep]] · [[07-Testing-Guide]] · [[05-n8n-Agents]]

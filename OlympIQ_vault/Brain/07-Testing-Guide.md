@@ -298,3 +298,9 @@ assert.Equal(t, 200, resp.StatusCode)
 ```json
 {"problem_title":"Two Sum","platform":"leetcode","problem_url":"https://leetcode.com/problems/two-sum/","classification":{"type":"Hash Table","subtype":"","difficulty_label":"Easy","confidence":0.95},"key_observations":["Use a hash map"],"algorithm_approach":{"summary":"Two-pass hash table","hints":[{"level":1,"text":"hint1"},{"level":2,"text":"hint2"},{"level":3,"text":"hint3"}]},"solution_steps":["step1"],"complexity":{"time":"O(n)","space":"O(n)","note":""},"common_mistakes":[],"similar_problems":[]}
 ```
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[02-Backend-Deep]] · [[Codeforces API Reference]] · [[LeetCode alfa-leetcode-api Reference]] · [[06-Errors-Bible]] · [[05-n8n-Agents]]

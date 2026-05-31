@@ -81,3 +81,9 @@ Two-column layout:
 - All requests include credentials (`withCredentials: true`) for cookie auth
 - 401 interceptor triggers token refresh then retries
 - All responses follow: `{ success, data, error }` shape
+
+---
+
+## Related notes
+
+[[03 - Architecture]] · [[04 - Backend]] · [[04-Frontend-Deep]] · [[06 - Active Issues]] · [[07 - Decisions Log]]

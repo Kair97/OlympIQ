@@ -64,12 +64,12 @@ Base path: `/api/v1`
 
 ### Auth (`/auth/*`) — rate limited 10 req/min
 
-| Method | Path | Body | Response |
-|--------|------|------|----------|
-| POST | `/auth/register` | `{email, username, password}` | `{id, email, username}` + cookies |
-| POST | `/auth/login` | `{email, password}` | `{id, email, username}` + cookies |
-| POST | `/auth/logout` | — | clears cookies |
-| POST | `/auth/refresh` | — (reads refresh_token cookie) | `{id, email, username}` + new cookies |
+| Method | Path             | Body                           | Response                              |
+| ------ | ---------------- | ------------------------------ | ------------------------------------- |
+| POST   | `/auth/register` | `{email, username, password}`  | `{id, email, username}` + cookies     |
+| POST   | `/auth/login`    | `{email, password}`            | `{id, email, username}` + cookies     |
+| POST   | `/auth/logout`   | —                              | clears cookies                        |
+| POST   | `/auth/refresh`  | — (reads refresh_token cookie) | `{id, email, username}` + new cookies |
 
 ### Protected — rate limited 60 req/min, requires `access_token` cookie
 
@@ -333,3 +333,9 @@ Base path: `/api/v1`
 | 8 | BuildStudentContext empty payload | Errors silently swallowed, sent empty data to AI | Return `ErrBadRequest` if `len(accounts)==0`; don't swallow errors |
 | 9 | AppShell infinite refresh loop | `navigate`/`setUser`/`setLoading` in useEffect deps → reruns on every render | Empty dep array `[]` with `// eslint-disable-line` |
 | 10 | DB migrate "unknown driver" | golang-migrate used pgx5 driver but pgx/v5 needs `pgx/v5` registration | Use `_ "github.com/jackc/pgx/v5/stdlib"` + driver name `"pgx5"` |
+
+---
+
+## Related notes
+
+[[_context]] · [[01 - Project Status]] · [[06 - Active Issues]] · [[01-Architecture]] · [[02-Backend-Deep]] · [[03-Database]] · [[04-Frontend-Deep]] · [[05-n8n-Agents]] · [[06-Errors-Bible]] · [[07-Testing-Guide]] · [[08-Security]] · [[09-Environment-Setup]]

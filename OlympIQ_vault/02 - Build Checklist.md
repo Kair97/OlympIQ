@@ -34,3 +34,9 @@ Each step must have passing tests before advancing.
 | 22 | Full README + architecture diagram + API reference | ⬜ | Not started |
 
 **Legend:** ✅ Done · 🔄 In Progress · ⬜ Not Started
+
+---
+
+## Related notes
+
+[[_context]] · [[01 - Project Status]] · [[06 - Active Issues]] · [[04 - Backend]] · [[05 - Frontend]] · [[00-Master-Context]]

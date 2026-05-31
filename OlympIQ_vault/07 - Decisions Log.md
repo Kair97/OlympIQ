@@ -63,3 +63,9 @@ Architectural choices that aren't obvious from reading the code.
 **Decision:** Nginx upstream uses the Docker service IP rather than lazy DNS hostname resolution.
 **Why:** Nginx resolves upstreams at startup. If the backend container starts after nginx, DNS resolution fails and all proxied requests get 502 until nginx restarts.
 **Impact:** docker-compose sets static IPs, or nginx uses `resolver 127.0.0.11` with variable-based proxy_pass.
+
+---
+
+## Related notes
+
+[[03 - Architecture]] · [[06 - Active Issues]] · [[08-Security]] · [[04 - Backend]] · [[01-Architecture]]

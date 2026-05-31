@@ -128,3 +128,9 @@ App shell: 248px fixed sidebar + fluid main area.
 | Revocation | Refresh tokens stored in `refresh_tokens` table; logout deletes the row |
 | Key generation | `openssl genrsa -out private.pem 2048 && openssl rsa -in private.pem -pubout -out public.pem` |
 | Env vars | `JWT_PRIVATE_KEY` (base64), `JWT_PUBLIC_KEY` (base64) |
+
+---
+
+## Related notes
+
+[[04 - Backend]] · [[05 - Frontend]] · [[07 - Decisions Log]] · [[01-Architecture]] · [[03-Database]] · [[08-Security]] · [[09-Environment-Setup]] · [[Codeforces API Reference]] · [[LeetCode alfa-leetcode-api Reference]]

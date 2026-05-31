@@ -860,3 +860,9 @@ GET https://codeforces.com/api/group.isManager?groupCode=JMRDZdAtYr&handles=Mike
 `implementation` · `sortings` · `dfs and similar` · `trees` · `strings` · `brute force`
 `constructive algorithms` · `number theory` · `combinatorics` · `geometry` · `bitmasks`
 `flows` · `games` · `matrices` · `shortest paths` · `divide and conquer`
+
+---
+
+## Related notes
+
+[[04 - Backend]] · [[LeetCode alfa-leetcode-api Reference]] · [[03 - Architecture]] · [[02-Backend-Deep]] · [[07-Testing-Guide]] · [[06-Errors-Bible]]

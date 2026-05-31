@@ -200,14 +200,23 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 		username = sc.LCHandle
 	}
 
+	weeklyHours := 15
+	if sc.Goals != nil && sc.Goals.WeeklyHours != nil {
+		weeklyHours = *sc.Goals.WeeklyHours
+	}
+
 	payload := map[string]interface{}{
 		"username":     username,
-		"mode":         mode,
-		"weekly_hours": 15,
+		"mode":         "all",
+		"weekly_hours": weeklyHours,
 	}
 
 	// Codeforces data
 	if sc.CFHandle != "" {
+		cfTopics := sc.CFTagFreq
+		if cfTopics == nil {
+			cfTopics = make(map[string]int)
+		}
 		ratingHistory := make([]int, 0, len(sc.CFRecentRating))
 		for _, r := range sc.CFRecentRating {
 			ratingHistory = append(ratingHistory, r.NewRating)
@@ -216,7 +225,7 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 			"rating":          sc.CFRating,
 			"rank":            orNA(sc.CFRank),
 			"problems_solved": len(sc.CFSolvedKeys),
-			"topics":          sc.CFTagFreq,
+			"topics":          cfTopics,
 			"rating_history":  ratingHistory,
 		}
 	}

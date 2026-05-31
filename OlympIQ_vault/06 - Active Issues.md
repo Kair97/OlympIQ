@@ -20,6 +20,15 @@ last_updated: 2026-05-31
 ### Uncommitted changes
 - `backend/internal/handlers/analyzer.go` — normalizeAnalysis function added
 - `frontend/src/pages/Analyzer.tsx` — resizable panels + all Atelier design features
+- `backend/internal/models/goals.go` — WeeklyHours field added
+- `backend/internal/repository/goals_repo.go` — weekly_hours in SQL
+- `backend/internal/handlers/roadmap.go` — mode always "all", weekly_hours in goals body
+- `backend/internal/services/ai_service.go` — callN8NRoadmap sends mode:"all" + weekly_hours from goals
+- `backend/db/migrations/009_add_weekly_hours_to_user_goals.*` — migration applied ✅
+- `frontend/src/types/index.ts` — UnifiedRoadmap + RoadmapSummary + updated UserGoal + RoadmapPattern
+- `frontend/src/api/roadmap.ts` — always sends mode:"all"
+- `frontend/src/pages/Roadmap.tsx` — full rewrite: SummarySection, unified views, GoalEditor weekly_hours
+- `frontend/src/store/roadmapStore.ts` — minor cleanup
 
 ---
 
@@ -27,6 +36,8 @@ last_updated: 2026-05-31
 
 | Date | What broke | Fix applied |
 |------|-----------|------------|
+| 2026-05-31 | **Full stats dashboard** — Added lang_freq, rating_buckets, index_freq, recent_ac to CF sync; added contest_history, recent_ac to LC sync; added GetContestHistory() to LC service. Frontend: recharts bar+line charts for CF difficulty histogram, problem index, language breakdown, LC contest history; recent AC lists link to original platform. Note: **sync must be triggered** after this deploy for new fields to populate — old raw_data rows only contain old fields | `stats_service.go`, `leetcode_service.go`, `models/stats.go`, `Dashboard.tsx`, `dashboard.ts` |
+| 2026-05-31 | **LC stats not showing** — Three bugs: (1) `TopPercentage` never populated in `parseLCDashboard` → always showed "?"; (2) language stats never fetched; (3) LCCard had no E/M/H progress bars or ranking. Fix: added `TopPercentage`+`LanguageStats` to `LCDashboard` struct, added `GetLanguageStats()` to LeetCodeService, updated sync to fetch `/languageStats`, rewrote LCCard with progress bars, language pills, ranking | `stats_service.go`, `leetcode_service.go`, `models/stats.go`, `Dashboard.tsx`, `dashboard.ts` |
 | 2026-05-31 | **Roadmap empty payload** — `BuildStudentContext` silently swallowed all API errors. If no platforms connected → sent empty payload to n8n. Fix: added `ErrBadRequest` if `len(accounts)==0`; errors no longer swallowed; CF rating history extended to last 24 contests | `ai_service.go: BuildStudentContext` |
 | 2026-05-31 | **Analyzer resizable panels** — added drag divider between left/right columns. Drag handle turns accent color on hover. Width clamped 25%-75%. Uses `mousedown/mousemove/mouseup` on `window` ref | `Analyzer.tsx: splitPct state + onDragStart` |
 | 2026-05-30 | **n8n Analyzer wired** — `N8N_ANALYZER_URL` in `.env` → backend routes `AnalyzeProblem` to n8n webhook instead of Gemini. Falls back to Gemini if URL is empty. n8n response may be wrapped in `[{"output":"..."}]` array — backend auto-unwraps it | Added `callN8NAnalyzer` in `ai_service.go`; added `N8NAnalyzerURL` to config |
@@ -81,4 +92,12 @@ last_updated: 2026-05-31
 - **Axios interceptor** — 401 from `/auth/login` must NOT trigger the token refresh loop. The `isAuthRoute` guard in `client.ts` handles this — do not remove it
 - **mapServiceErr default case** — any error not wrapped with a typed sentinel (`ErrExternal`, `ErrNotFound`, etc.) returns 500. Always wrap errors from external calls with `ErrExternal`
 - **LeetCode direct URLs return 403** — `https://leetcode.com/problems/{slug}/` blocks all non-browser HTTP requests (no session cookie = 403 Forbidden). NEVER call leetcode.com from backend or Postman. Always use the alfa-leetcode-api proxy (`http://leetcode-api:3000/select?titleSlug={slug}`). The `https://leetcode.com/problems/...` links in the UI are `target="_blank"` buttons for the user's own browser — not API calls.
-- **Brain vault** — `OlympIQ_vault/Brain/` contains 9 reference files. Read `Brain/00-Master-Context.md` first each session. Update `Brain/06-Errors-Bible.md` when discovering new error patterns.
+- **Stats new fields require re-sync** — After the full stats expansion (lang_freq, rating_buckets, contest_history, etc.), existing users must hit "Sync" in Profile to repopulate raw_data. Old rows only have the old fields; new dashboard panels will be empty until a fresh sync.
+- **Recharts bundle size** — Adding recharts increased JS bundle from ~365KB to ~732KB gzipped ~217KB. Consider lazy-importing the chart components if startup performance becomes an issue.
+- **Brain vault** — `OlympIQ_vault/Brain/` contains 9 reference files. Read [[00-Master-Context]] first each session. Update [[06-Errors-Bible]] when discovering new error patterns.
+
+---
+
+## Related notes
+
+[[_context]] · [[07 - Decisions Log]] · [[04 - Backend]] · [[06-Errors-Bible]] · [[05-n8n-Agents]] · [[Sessions/README]]

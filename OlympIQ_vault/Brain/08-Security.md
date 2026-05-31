@@ -202,3 +202,9 @@ Before any prompt is sent to Gemini or n8n:
 3. Problem URLs are from user input but only used in prompts, not executed
 
 Maximum payload to AI: 10,000 chars for URL/text inputs; `buildRoadmapUserMessage` generates plain text from structured data (no user-controlled free text).
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[03 - Architecture]] · [[07 - Decisions Log]] · [[02-Backend-Deep]] · [[09-Environment-Setup]]

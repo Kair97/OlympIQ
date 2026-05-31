@@ -31,6 +31,7 @@ export interface UserGoal {
   goal_type: 'rating' | 'interview' | 'topic_mastery'
   target_rating: number | null
   target_date: string | null
+  weekly_hours: number | null
   notify_daily: boolean
   notify_weekly: boolean
   notify_problems: boolean
@@ -63,7 +64,21 @@ export interface RoadmapTopic {
 export interface RoadmapPattern {
   name: string
   frequency: number
+  user_strength?: string
+  problems_solved?: number
   problems: RoadmapProblem[]
+}
+
+export interface RoadmapMilestone {
+  week: number
+  description: string
+}
+
+export interface RoadmapSummary {
+  total_weeks: number
+  estimated_hours: number
+  focus_areas: string[]
+  milestones: RoadmapMilestone[]
 }
 
 export interface WeeklyRoadmap {
@@ -86,7 +101,14 @@ export interface InterviewRoadmap {
   patterns: RoadmapPattern[]
 }
 
-export type AnyRoadmap = WeeklyRoadmap | TopicRoadmap | InterviewRoadmap
+export interface UnifiedRoadmap {
+  summary:        RoadmapSummary
+  topic_mode:     { generated_at: string; goal_summary: string; topics: RoadmapTopic[] }
+  weekly_mode:    { generated_at: string; goal_summary: string; weeks: RoadmapWeek[] }
+  interview_mode: { generated_at: string; target_companies: string[]; patterns: RoadmapPattern[] }
+}
+
+export type AnyRoadmap = WeeklyRoadmap | TopicRoadmap | InterviewRoadmap | UnifiedRoadmap
 
 export interface Analysis {
   id: string

@@ -307,3 +307,9 @@ Or use the down migrations:
 docker-compose exec backend ./migrate down  # rolls back all
 docker-compose exec backend ./migrate up    # reapplies all
 ```
+
+---
+
+## Related notes
+
+[[00-Master-Context]] · [[03 - Architecture]] · [[02-Backend-Deep]] · [[01-Architecture]]
