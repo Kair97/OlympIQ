@@ -209,9 +209,14 @@ func (s *AIService) TestConnection(ctx context.Context) (string, error) {
 }
 
 // GenerateRoadmap generates a roadmap. Uses n8n webhook if configured, otherwise Gemini.
+// Falls back to Gemini if n8n returns an empty or invalid response.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
 	if s.n8nRoadmapURL != "" {
-		return s.callN8NRoadmap(ctx, sc, mode)
+		result, err := s.callN8NRoadmap(ctx, sc, mode)
+		if err == nil && result != "" {
+			return result, nil
+		}
+		// n8n failed or returned empty — fall back to Gemini
 	}
 	userMsg := buildRoadmapUserMessage(sc, mode)
 	return s.callGemini(ctx, roadmapSystemPrompt, userMsg)
@@ -333,9 +338,14 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 }
 
 // AnalyzeProblem analyzes a problem. Uses n8n webhook if configured, otherwise Gemini.
+// Falls back to Gemini if n8n returns an empty or invalid response.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
 	if s.n8nAnalyzerURL != "" {
-		return s.callN8NAnalyzer(ctx, problemURL)
+		result, err := s.callN8NAnalyzer(ctx, problemURL)
+		if err == nil && result != "" {
+			return result, nil
+		}
+		// n8n failed or returned empty — fall back to Gemini
 	}
 	userMsg := fmt.Sprintf("Analyze this competitive programming problem:\n\nURL: %s\n\nProvide a complete educational razbor. Do not write any working solution code.", sanitize(problemURL))
 	return s.callGemini(ctx, razborSystemPrompt, userMsg)
