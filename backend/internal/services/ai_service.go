@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -46,22 +47,23 @@ type StudentContext struct {
 // AIService handles AI calls for roadmap, razbor, and recommendations.
 // Uses n8n webhooks when configured; falls back to Gemini otherwise.
 type AIService struct {
-	apiKey         string
-	model          string
-	n8nAnalyzerURL string
-	n8nRoadmapURL  string
-	http           *http.Client
-	platforms      repository.PlatformRepository
-	stats          repository.StatsRepository
-	goals          repository.GoalsRepository
-	cache          CacheStore
-	cf             *CodeforcesService
-	lc             *LeetCodeService
+	apiKey            string
+	model             string
+	n8nAnalyzerURL    string
+	n8nRoadmapURL     string
+	lcPublicAPIURL    string // public alfa-leetcode-api URL used in n8n payloads
+	http              *http.Client
+	platforms         repository.PlatformRepository
+	stats             repository.StatsRepository
+	goals             repository.GoalsRepository
+	cache             CacheStore
+	cf                *CodeforcesService
+	lc                *LeetCodeService
 }
 
 // NewAIService constructs an AIService.
 func NewAIService(
-	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL string,
+	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL, lcPublicAPIURL string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -74,6 +76,7 @@ func NewAIService(
 		model:          model,
 		n8nAnalyzerURL: n8nAnalyzerURL,
 		n8nRoadmapURL:  n8nRoadmapURL,
+		lcPublicAPIURL: lcPublicAPIURL,
 		http:           &http.Client{Timeout: 90 * time.Second},
 		platforms:      platforms,
 		stats:          stats,
@@ -82,6 +85,29 @@ func NewAIService(
 		cf:             cf,
 		lc:             lc,
 	}
+}
+
+// lcProblemURLToAPIURL converts a leetcode.com problem URL into the equivalent
+// alfa-leetcode-api /select endpoint URL so n8n can fetch problem data without
+// hitting leetcode.com directly (which returns 403 to non-browser requests).
+//
+//	https://leetcode.com/problems/two-sum/           → {base}/select?titleSlug=two-sum
+//	https://leetcode.com/problems/two-sum/description/ → same
+func (s *AIService) lcProblemURLToAPIURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || !strings.Contains(parsed.Host, "leetcode.com") {
+		return rawURL // not a LC URL — return as-is (e.g. Codeforces)
+	}
+	// Path looks like /problems/{titleSlug} or /problems/{titleSlug}/description/...
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for i, p := range parts {
+		if p == "problems" && i+1 < len(parts) && parts[i+1] != "" {
+			slug := parts[i+1]
+			base := strings.TrimRight(s.lcPublicAPIURL, "/")
+			return base + "/select?titleSlug=" + slug
+		}
+	}
+	return rawURL
 }
 
 // BuildStudentContext assembles all user data for AI prompts.
@@ -316,9 +342,14 @@ func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (stri
 }
 
 // callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
+// LeetCode problem URLs are transformed to the public alfa-leetcode-api /select endpoint
+// so n8n (a cloud service) can fetch problem data without hitting leetcode.com directly.
 func (s *AIService) callN8NAnalyzer(ctx context.Context, problemURL string) (string, error) {
+	// Transform LC URLs: leetcode.com/problems/{slug}/ → alfa-leetcode-api.onrender.com/select?titleSlug={slug}
+	n8nURL := s.lcProblemURLToAPIURL(sanitize(problemURL))
+
 	body, err := json.Marshal(map[string]string{
-		"problem_url": sanitize(problemURL),
+		"problem_url": n8nURL,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: failed to build n8n request: %v", ErrExternal, err)

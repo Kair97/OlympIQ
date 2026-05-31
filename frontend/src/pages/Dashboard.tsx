@@ -291,6 +291,88 @@ function CFRecentACList({ items }: { items: CFRecentProblem[] }) {
   )
 }
 
+// ── LC Skill Full Breakdown (tiers) ──────────────────────────────────────────
+type SkillEntry = { tagName: string; problemsSolved: number }
+
+function LCSkillBreakdown({ skills }: { skills: SkillEntry[] }) {
+  if (!skills?.length) return <div style={{ color: 'var(--text-faint)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>no skill data — sync your account</div>
+
+  // LeetCode returns skills in tier order: fundamental first, advanced last.
+  // The backend merges them in order: fundamental → intermediate → advanced.
+  // We group by solved count ranges as a proxy for tier since tier info is merged.
+  const sorted = [...skills].sort((a, b) => b.problemsSolved - a.problemsSolved)
+  const maxVal = sorted[0]?.problemsSolved ?? 1
+
+  // Split into buckets: strong (top 3), moderate (next 4), weak (rest with > 0)
+  const strong    = sorted.filter(s => s.problemsSolved > 0).slice(0, 3)
+  const moderate  = sorted.filter(s => s.problemsSolved > 0).slice(3, 8)
+  const weak      = sorted.filter(s => s.problemsSolved > 0).slice(8)
+  const untouched = sorted.filter(s => s.problemsSolved === 0)
+
+  function SkillRow({ s, color }: { s: SkillEntry; color: string }) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 32px', gap: 8, alignItems: 'center', fontSize: 11 }}>
+        <span style={{ color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {s.tagName}
+        </span>
+        <div style={{ height: 5, background: 'var(--bg-elev)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${(s.problemsSolved / maxVal) * 100}%`, background: color, borderRadius: 3 }} />
+        </div>
+        <span style={{ color, fontFamily: 'var(--font-mono)', textAlign: 'right', fontSize: 11 }}>{s.problemsSolved}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {strong.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--ok)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            strong
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {strong.map(s => <SkillRow key={s.tagName} s={s} color="var(--ok)" />)}
+          </div>
+        </div>
+      )}
+      {moderate.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--warn)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            moderate
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {moderate.map(s => <SkillRow key={s.tagName} s={s} color="var(--warn)" />)}
+          </div>
+        </div>
+      )}
+      {weak.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--err)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            needs work
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {weak.map(s => <SkillRow key={s.tagName} s={s} color="var(--err)" />)}
+          </div>
+        </div>
+      )}
+      {untouched.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            not started · {untouched.length} topics
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {untouched.map(s => (
+              <span key={s.tagName} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elev)', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                {s.tagName}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── LC Contest History Chart ──────────────────────────────────────────────────
 function LCContestChart({ history }: { history: LCContestEntry[] }) {
   const attended = history.filter(h => h.attended).slice(-15)
@@ -678,6 +760,14 @@ export default function Dashboard() {
                     <h3>LeetCode analysis</h3>
                     <span className="oq-dim oq-mono" style={{ fontSize: 11 }}>@{data.leetcode.handle}</span>
                   </div>
+
+                  {/* Skill topic breakdown — mirrors what LeetCode profile shows */}
+                  {(data.leetcode.skills ?? []).length > 0 && (
+                    <>
+                      <SubHead label="topic breakdown" />
+                      <LCSkillBreakdown skills={data.leetcode.skills} />
+                    </>
+                  )}
 
                   {hasLCContest && (
                     <>
