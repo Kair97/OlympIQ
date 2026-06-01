@@ -1,8 +1,8 @@
 import { get, post } from './client'
-import type { AnyRoadmap } from '../types'
+import type { UnifiedRoadmap } from '../types'
 
-export const generateRoadmap = (mode: string) =>
-  post<AnyRoadmap>('/roadmap/generate', { mode })
+export const generateRoadmap = () =>
+  post<UnifiedRoadmap>('/roadmap/generate', { mode: 'all' })
 
 export const getRoadmap = () =>
-  get<{ roadmap: AnyRoadmap; mode: string; generated_at: string }>('/roadmap')
+  get<{ roadmap: UnifiedRoadmap; mode: string; generated_at: string }>('/roadmap')

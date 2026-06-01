@@ -31,19 +31,18 @@ func (h *RoadmapHandler) Generate(c *fiber.Ctx) error {
 	if err != nil {
 		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
 	}
+	// mode is kept in the body for backwards compat but always sent as "all" to the AI
 	var in struct {
-		Mode string `json:"mode" validate:"required,oneof=weekly topic interview"`
+		Mode string `json:"mode"`
 	}
-	if err := parseAndValidate(c, &in); err != nil {
-		return errResponse(c, fiber.StatusBadRequest, "mode must be weekly, topic, or interview")
-	}
+	_ = c.BodyParser(&in)
 
 	sc, err := h.ai.BuildStudentContext(c.Context(), uid)
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
 
-	raw, err := h.ai.GenerateRoadmap(c.Context(), sc, in.Mode)
+	raw, err := h.ai.GenerateRoadmap(c.Context(), sc, "all")
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
@@ -52,7 +51,7 @@ func (h *RoadmapHandler) Generate(c *fiber.Ctx) error {
 		ID:          uuid.New(),
 		UserID:      uid,
 		Content:     []byte(raw),
-		Mode:        in.Mode,
+		Mode:        "all",
 		GeneratedAt: time.Now().UTC(),
 	}
 	if err := h.roadmaps.Insert(c.Context(), rm); err != nil {
@@ -107,6 +106,7 @@ func (h *RoadmapHandler) UpsertGoals(c *fiber.Ctx) error {
 		GoalType       string     `json:"goal_type"       validate:"required,oneof=rating interview topic_mastery"`
 		TargetRating   *int       `json:"target_rating"`
 		TargetDate     *time.Time `json:"target_date"`
+		WeeklyHours    *int       `json:"weekly_hours"`
 		NotifyDaily    bool       `json:"notify_daily"`
 		NotifyWeekly   bool       `json:"notify_weekly"`
 		NotifyProblems bool       `json:"notify_problems"`
@@ -121,6 +121,7 @@ func (h *RoadmapHandler) UpsertGoals(c *fiber.Ctx) error {
 		GoalType:       in.GoalType,
 		TargetRating:   in.TargetRating,
 		TargetDate:     in.TargetDate,
+		WeeklyHours:    in.WeeklyHours,
 		NotifyDaily:    in.NotifyDaily,
 		NotifyWeekly:   in.NotifyWeekly,
 		NotifyProblems: in.NotifyProblems,

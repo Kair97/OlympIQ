@@ -31,6 +31,7 @@ export interface UserGoal {
   goal_type: 'rating' | 'interview' | 'topic_mastery'
   target_rating: number | null
   target_date: string | null
+  weekly_hours: number | null
   notify_daily: boolean
   notify_weekly: boolean
   notify_problems: boolean
@@ -50,6 +51,7 @@ export interface RoadmapWeek {
   week: number
   theme: string
   focus_topics: string[]
+  difficulty_target?: string   // e.g. "CF 1300–1500 / LC Easy-Medium"
   problems: RoadmapProblem[]
 }
 
@@ -57,13 +59,37 @@ export interface RoadmapTopic {
   name: string
   why: string
   strength_score: number
+  sub_patterns_covered?: string[]  // e.g. ["Interval DP", "Bitmask DP"]
   problems: RoadmapProblem[]
 }
 
 export interface RoadmapPattern {
   name: string
   frequency: number
+  user_strength?: string
+  problems_solved?: number
   problems: RoadmapProblem[]
+}
+
+export interface RoadmapMilestone {
+  week: number
+  description?: string  // old schema
+  goal?: string         // new schema
+}
+
+export interface RoadmapPlatformBalance {
+  leetcode_percentage: number
+  codeforces_percentage: number
+  note: string
+}
+
+export interface RoadmapSummary {
+  total_weeks: number
+  estimated_hours: number
+  current_level?: string       // e.g. "Strong in Arrays but DP is a critical gap"
+  focus_areas: string[]
+  milestones: RoadmapMilestone[]
+  platform_balance?: RoadmapPlatformBalance
 }
 
 export interface WeeklyRoadmap {
@@ -86,7 +112,14 @@ export interface InterviewRoadmap {
   patterns: RoadmapPattern[]
 }
 
-export type AnyRoadmap = WeeklyRoadmap | TopicRoadmap | InterviewRoadmap
+export interface UnifiedRoadmap {
+  summary:        RoadmapSummary
+  topic_mode:     { generated_at: string; goal_summary: string; topics: RoadmapTopic[] }
+  weekly_mode:    { generated_at: string; goal_summary: string; total_weeks?: number; weeks: RoadmapWeek[] }
+  interview_mode: { generated_at: string; target_companies: string[]; readiness_score?: number; patterns: RoadmapPattern[] }
+}
+
+export type AnyRoadmap = WeeklyRoadmap | TopicRoadmap | InterviewRoadmap | UnifiedRoadmap
 
 export interface Analysis {
   id: string
@@ -97,10 +130,17 @@ export interface Analysis {
   analysis?: AnalysisContent
 }
 
+export interface AnalysisHint {
+  level: string | number   // new: "easy"/"intermediate"/"advanced"  old: 1/2/3
+  text?: string            // old field name (backend normalizes new → old)
+  hint?: string            // new field name (kept for raw passthrough)
+}
+
 export interface AnalysisContent {
   problem_title: string
   platform: string
   problem_url: string
+  difficulty?: string      // e.g. "1900" for CF or "Medium" for LC
   classification: {
     type: string
     subtype: string
@@ -110,10 +150,16 @@ export interface AnalysisContent {
   key_observations: string[]
   algorithm_approach: {
     summary: string
-    hints: Array<{ level: number; text: string }>
+    hints: AnalysisHint[]
   }
   solution_steps: string[]
-  complexity: { time: string; space: string; note: string }
+  complexity: {
+    time: string
+    space: string
+    note?: string        // synthesized from time_note + space_note by backend
+    time_note?: string   // new: explanation for time complexity
+    space_note?: string  // new: explanation for space complexity
+  }
   common_mistakes: string[]
   similar_problems: Array<{
     title: string

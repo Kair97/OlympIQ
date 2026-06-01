@@ -13,6 +13,7 @@ type UserGoal struct {
 	GoalType       string     `json:"goal_type"`
 	TargetRating   *int       `json:"target_rating"`
 	TargetDate     *time.Time `json:"target_date"`
+	WeeklyHours    *int       `json:"weekly_hours"`
 	NotifyDaily    bool       `json:"notify_daily"`
 	NotifyWeekly   bool       `json:"notify_weekly"`
 	NotifyProblems bool       `json:"notify_problems"`

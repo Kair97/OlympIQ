@@ -10,19 +10,15 @@ interface NotifyPrefs {
 }
 
 interface RoadmapState {
-  // Persistent across navigation
   roadmap: AnyRoadmap | null
   mode: Mode
   goals: UserGoal | null
   notify: NotifyPrefs
-  loaded: boolean       // true once we've fetched at least once — skip re-fetch on revisit
-
-  // Transient
+  loaded: boolean
   generating: boolean
   genError: string
   editing: boolean
 
-  // Actions
   setRoadmap: (r: AnyRoadmap | null, mode?: Mode) => void
   setMode: (m: Mode) => void
   setGoals: (g: UserGoal | null) => void

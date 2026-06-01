@@ -14,7 +14,8 @@ api.interceptors.response.use(
   (r) => r,
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && !original._retry) {
+    const isAuthRoute = original?.url?.startsWith('/auth/')
+    if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           refreshQueue.push((ok) => (ok ? resolve(api(original)) : reject(error)))

@@ -762,6 +762,7 @@ a.oq-btn-primary, a.oq-btn-ghost { text-decoration: none; }
 .oq-stream-cursor { padding: 6px 0; }
 .oq-cursor-block { color: var(--accent); animation: blink 1s steps(2) infinite; font-family: var(--font-mono); }
 @keyframes blink { 50% { opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ──────── history sidebar ──────── */
 

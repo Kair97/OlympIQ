@@ -85,6 +85,66 @@ func (s *LeetCodeService) GetSkill(ctx context.Context, handle string) (*models.
 	return &skill, nil
 }
 
+// GetLanguageStats fetches /{handle}/languageStats with caching.
+func (s *LeetCodeService) GetLanguageStats(ctx context.Context, handle string) ([]models.LeetCodeLanguageStat, error) {
+	key := fmt.Sprintf("lc:lang:%s", handle)
+	if cached, err := s.cache.Get(ctx, key); err == nil {
+		// API may return plain array or wrapped object
+		var direct []models.LeetCodeLanguageStat
+		if json.Unmarshal([]byte(cached), &direct) == nil && len(direct) > 0 {
+			return direct, nil
+		}
+		var wrapped struct {
+			LanguageStats []models.LeetCodeLanguageStat `json:"languageStats"`
+		}
+		if json.Unmarshal([]byte(cached), &wrapped) == nil {
+			return wrapped.LanguageStats, nil
+		}
+	}
+	body, err := s.doGet(ctx, fmt.Sprintf("%s/%s/languageStats", s.baseURL, handle))
+	if err != nil {
+		return nil, err
+	}
+	var direct []models.LeetCodeLanguageStat
+	if json.Unmarshal(body, &direct) == nil && len(direct) > 0 {
+		_ = s.cache.Set(ctx, key, string(body), time.Hour)
+		return direct, nil
+	}
+	var wrapped struct {
+		LanguageStats []models.LeetCodeLanguageStat `json:"languageStats"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, err
+	}
+	_ = s.cache.Set(ctx, key, string(body), time.Hour)
+	return wrapped.LanguageStats, nil
+}
+
+// GetContestHistory fetches /{handle}/contest/history with caching.
+func (s *LeetCodeService) GetContestHistory(ctx context.Context, handle string) ([]models.LeetCodeContestEntry, error) {
+	key := fmt.Sprintf("lc:contest_hist:%s", handle)
+	if cached, err := s.cache.Get(ctx, key); err == nil {
+		var wrapper struct {
+			ContestHistory []models.LeetCodeContestEntry `json:"contestHistory"`
+		}
+		if json.Unmarshal([]byte(cached), &wrapper) == nil {
+			return wrapper.ContestHistory, nil
+		}
+	}
+	body, err := s.doGet(ctx, fmt.Sprintf("%s/%s/contest/history", s.baseURL, handle))
+	if err != nil {
+		return nil, err
+	}
+	var wrapper struct {
+		ContestHistory []models.LeetCodeContestEntry `json:"contestHistory"`
+	}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		return nil, err
+	}
+	_ = s.cache.Set(ctx, key, string(body), time.Hour)
+	return wrapper.ContestHistory, nil
+}
+
 // GetCalendar fetches /{handle}/calendar with caching and returns the raw JSON.
 func (s *LeetCodeService) GetCalendar(ctx context.Context, handle string) (map[string]int, error) {
 	key := fmt.Sprintf("lc:calendar:%s", handle)
