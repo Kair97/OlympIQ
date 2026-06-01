@@ -1,0 +1,221 @@
+{
+  "main": {
+    "id": "9410cbf5a4d65ee8",
+    "type": "split",
+    "children": [
+      {
+        "id": "890046262c962468",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8e709728bbc85cb6",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "ff36e18b4c890428",
+    "type": "split",
+    "children": [
+      {
+        "id": "7615031ea92f731f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f19ca2edac8069d2",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "a4b0785f68cd61b5",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "974ff64c99f9cb2a",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "c60aeb24fc2e3458",
+    "type": "split",
+    "children": [
+      {
+        "id": "85878e1e6e844ee2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b8f54ea78b199730",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Welcome.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Welcome"
+            }
+          },
+          {
+            "id": "4753141590d18852",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Welcome.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Welcome"
+            }
+          },
+          {
+            "id": "ae45cea15d6f6e68",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "209c268eaa1e9e67",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "75f9b5bf9e48f6dc",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Welcome.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Welcome"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "8e709728bbc85cb6",
+  "lastOpenFiles": [
+    "06 - Active Issues.md.tmp.19408.a8a47ade4ccf",
+    "Sessions/README.md.tmp.19408.d005ddbf9c32",
+    "Claude Prompts.md",
+    "07 - Decisions Log.md",
+    "06 - Active Issues.md",
+    "03 - Architecture.md",
+    "02 - Build Checklist.md",
+    "01 - Project Status.md",
+    "00 - Index.md",
+    "Sessions/README.md",
+    "Brain/11-API-Reference.md",
+    "Brain/00-Master-Context.md",
+    "00 - Index.md.tmp.30104.9805f775d2ce",
+    "00 - Index.md.tmp.30104.e0c649250c65",
+    "Brain/02-Backend-Deep.md",
+    "Brain/03-Database.md",
+    "Brain/07-Testing-Guide.md",
+    "Backend/LeetCode alfa-leetcode-api Reference.md",
+    "Backend/Codeforces API Reference.md",
+    "Frontend/05 - Frontend.md",
+    "Brain/08-Security.md",
+    "Brain/04-Frontend-Deep.md",
+    "Sessions/README.md.tmp.19408.4857947ce9f7",
+    "06 - Active Issues.md.tmp.19408.eee9a6a996ca",
+    "Sessions/README.md.tmp.19408.3b188fb02c61",
+    "Sessions/README.md.tmp.19408.123e67e89f02",
+    "00 - Index.md.tmp.19408.fcc6207c84d3",
+    "Brain/10-Roadmap-Agent-Prompt.md",
+    "Brain/10-Roadmap-Agent-Prompt.md.tmp.19408.4c4d03f2c319",
+    "Sessions/README.md.tmp.19408.b389f2143f52",
+    "Brain/09-Environment-Setup.md",
+    "Brain/06-Errors-Bible.md",
+    "Brain/05-n8n-Agents.md",
+    "Brain/01-Architecture.md",
+    "Templates/session-log.md",
+    "_context.md"
+  ]
+}

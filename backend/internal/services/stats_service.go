@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,14 +33,18 @@ func NewStatsService(
 
 // CFDashboard is the rich Codeforces data returned by GetDashboard.
 type CFDashboard struct {
-	Handle         string         `json:"handle"`
-	Rating         int            `json:"rating"`
-	MaxRating      int            `json:"max_rating"`
-	Rank           string         `json:"rank"`
-	ProblemsSolved int            `json:"problems_solved"`
-	ContestCount   int            `json:"contest_count"`
-	TagFreq        map[string]int `json:"tag_freq"`
-	RatingHistory  []int          `json:"rating_history"`
+	Handle         string                  `json:"handle"`
+	Rating         int                     `json:"rating"`
+	MaxRating      int                     `json:"max_rating"`
+	Rank           string                  `json:"rank"`
+	ProblemsSolved int                     `json:"problems_solved"`
+	ContestCount   int                     `json:"contest_count"`
+	TagFreq        map[string]int          `json:"tag_freq"`
+	RatingHistory  []int                   `json:"rating_history"`
+	LangFreq       map[string]int          `json:"lang_freq"`
+	RatingBuckets  map[string]int          `json:"rating_buckets"`
+	IndexFreq      map[string]int          `json:"index_freq"`
+	RecentAC       []models.CFRecentProblem `json:"recent_ac"`
 }
 
 // LCSkill is one topic entry from the skill breakdown.
@@ -50,16 +55,21 @@ type LCSkill struct {
 
 // LCDashboard is the rich LeetCode data returned by GetDashboard.
 type LCDashboard struct {
-	Handle         string         `json:"handle"`
-	ContestRating  float64        `json:"rating"`
-	Ranking        int            `json:"ranking"`
-	ProblemsSolved int            `json:"problems_solved"`
-	EasySolved     int            `json:"easy_solved"`
-	MediumSolved   int            `json:"medium_solved"`
-	HardSolved     int            `json:"hard_solved"`
-	ContestAttend  int            `json:"contest_attend"`
-	Calendar       map[string]int `json:"calendar"`
-	Skills         []LCSkill      `json:"skills"`
+	Handle          string                        `json:"handle"`
+	ContestRating   float64                       `json:"rating"`
+	Ranking         int                           `json:"ranking"`
+	ProblemsSolved  int                           `json:"problems_solved"`
+	EasySolved      int                           `json:"easy_solved"`
+	MediumSolved    int                           `json:"medium_solved"`
+	HardSolved      int                           `json:"hard_solved"`
+	ContestAttend   int                           `json:"contest_attend"`
+	TopPercentage   float64                       `json:"top_percentage"`
+	Streak          int                           `json:"streak"`
+	Calendar        map[string]int                `json:"calendar"`
+	Skills          []LCSkill                     `json:"skills"`
+	LanguageStats   map[string]int                `json:"language_stats"`
+	ContestHistory  []models.LeetCodeContestEntry  `json:"contest_history"`
+	RecentAC        []models.LCRecentProblem       `json:"recent_ac"`
 }
 
 // DashboardData is the full rich payload for the Dashboard page.
@@ -128,7 +138,7 @@ func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle stri
 	subs, _ := s.cf.GetSubmissions(ctx, handle, 500)
 	history, _ := s.cf.GetRatingHistory(ctx, handle)
 
-	// Extract last 24 rating points for the sparkline.
+	// Last 24 rating points for the sparkline.
 	historyPoints := make([]int, 0, 24)
 	start := 0
 	if len(history) > 24 {
@@ -139,19 +149,71 @@ func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle stri
 	}
 
 	tagFreq := BuildTagFrequency(subs)
-	solvedCount := 0
-	for _, v := range tagFreq {
-		if v > solvedCount {
-			solvedCount = v
+
+	// Unique accepted problems.
+	seenProblem := make(map[string]bool)
+	// Language frequency (accepted only).
+	langFreq := make(map[string]int)
+	// Rating bucket frequency: "800", "900", ..., "3500", "unrated".
+	ratingBuckets := make(map[string]int)
+	// Problem index frequency: "A", "B", "C", "D", "E", "F+".
+	indexFreq := make(map[string]int)
+	// Recent accepted (up to 10, most recent first).
+	var recentAC []models.CFRecentProblem
+
+	for _, sub := range subs {
+		if sub.Verdict != "OK" {
+			continue
+		}
+		key := fmt.Sprintf("%d/%s", sub.Problem.ContestID, sub.Problem.Index)
+		if seenProblem[key] {
+			continue
+		}
+		seenProblem[key] = true
+
+		langFreq[sub.ProgrammingLanguage]++
+
+		if sub.Problem.Rating != nil {
+			bucket := fmt.Sprintf("%d", *sub.Problem.Rating)
+			ratingBuckets[bucket]++
+		} else {
+			ratingBuckets["unrated"]++
+		}
+
+		idx := sub.Problem.Index
+		if len(idx) > 0 {
+			letter := string(idx[0])
+			switch letter {
+			case "A", "B", "C", "D", "E":
+				indexFreq[letter]++
+			default:
+				indexFreq["F+"]++
+			}
+		}
+
+		if len(recentAC) < 10 {
+			recentAC = append(recentAC, models.CFRecentProblem{
+				Name:      sub.Problem.Name,
+				ContestID: sub.Problem.ContestID,
+				Index:     sub.Problem.Index,
+				Rating:    sub.Problem.Rating,
+				Tags:      sub.Problem.Tags,
+				SolvedAt:  sub.CreationTimeSeconds,
+			})
 		}
 	}
+	solvedCount := len(seenProblem)
 
 	rawData := map[string]interface{}{
-		"user":           info,
-		"tag_freq":       tagFreq,
-		"sub_count":      len(subs),
-		"rating_history": historyPoints,
-		"contest_count":  len(history),
+		"user":            info,
+		"tag_freq":        tagFreq,
+		"sub_count":       solvedCount,
+		"rating_history":  historyPoints,
+		"contest_count":   len(history),
+		"lang_freq":       langFreq,
+		"rating_buckets":  ratingBuckets,
+		"index_freq":      indexFreq,
+		"recent_ac":       recentAC,
 	}
 	rawJSON, _ := json.Marshal(rawData)
 
@@ -182,12 +244,33 @@ func (s *StatsService) syncLC(ctx context.Context, userID uuid.UUID, handle stri
 	contest, _ := s.lc.GetContest(ctx, handle)
 	skill, _ := s.lc.GetSkill(ctx, handle)
 	calendar, _ := s.lc.GetCalendar(ctx, handle)
+	langStats, _ := s.lc.GetLanguageStats(ctx, handle)
+	contestHistory, _ := s.lc.GetContestHistory(ctx, handle)
+
+	// Build recent AC from acSubmissions.
+	acSubs, _ := s.lc.GetAcSubmissions(ctx, handle)
+	recentAC := make([]models.LCRecentProblem, 0, 10)
+	for i, sub := range acSubs {
+		if i >= 10 {
+			break
+		}
+		ts, _ := strconv.ParseInt(sub.Timestamp, 10, 64)
+		recentAC = append(recentAC, models.LCRecentProblem{
+			Title:     sub.Title,
+			TitleSlug: sub.TitleSlug,
+			SolvedAt:  ts,
+			Lang:      sub.Lang,
+		})
+	}
 
 	rawData := map[string]interface{}{
-		"profile":  profile,
-		"contest":  contest,
-		"skill":    skill,
-		"calendar": calendar,
+		"profile":         profile,
+		"contest":         contest,
+		"skill":           skill,
+		"calendar":        calendar,
+		"language_stats":  langStats,
+		"contest_history": contestHistory,
+		"recent_ac":       recentAC,
 	}
 	rawJSON, _ := json.Marshal(rawData)
 
@@ -233,15 +316,23 @@ func parseCFDashboard(handle string, stat *models.UserStats) *CFDashboard {
 
 	if len(stat.RawData) > 0 {
 		var raw struct {
-			TagFreq       map[string]int `json:"tag_freq"`
-			SubCount      int            `json:"sub_count"`
-			RatingHistory []int          `json:"rating_history"`
-			ContestCount  int            `json:"contest_count"`
+			TagFreq       map[string]int           `json:"tag_freq"`
+			SubCount      int                      `json:"sub_count"`
+			RatingHistory []int                    `json:"rating_history"`
+			ContestCount  int                      `json:"contest_count"`
+			LangFreq      map[string]int           `json:"lang_freq"`
+			RatingBuckets map[string]int           `json:"rating_buckets"`
+			IndexFreq     map[string]int           `json:"index_freq"`
+			RecentAC      []models.CFRecentProblem `json:"recent_ac"`
 		}
 		if json.Unmarshal(stat.RawData, &raw) == nil {
 			d.TagFreq = raw.TagFreq
 			d.RatingHistory = raw.RatingHistory
 			d.ProblemsSolved = raw.SubCount
+			d.LangFreq = raw.LangFreq
+			d.RatingBuckets = raw.RatingBuckets
+			d.IndexFreq = raw.IndexFreq
+			d.RecentAC = raw.RecentAC
 			if raw.ContestCount > 0 {
 				d.ContestCount = raw.ContestCount
 			}
@@ -253,7 +344,7 @@ func parseCFDashboard(handle string, stat *models.UserStats) *CFDashboard {
 func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 	d := &LCDashboard{Handle: handle}
 	if stat.Rank != nil {
-		d.Ranking, _ = fmt.Sscanf(*stat.Rank, "#%d", &d.Ranking)
+		fmt.Sscanf(*stat.Rank, "#%d", &d.Ranking)
 	}
 
 	if len(stat.RawData) == 0 {
@@ -270,7 +361,10 @@ func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 				Fundamental  []LCSkill `json:"fundamental"`
 			} `json:"data"`
 		} `json:"skill"`
-		Calendar map[string]int `json:"calendar"`
+		Calendar       map[string]int                 `json:"calendar"`
+		LanguageStats  []models.LeetCodeLanguageStat  `json:"language_stats"`
+		ContestHistory []models.LeetCodeContestEntry  `json:"contest_history"`
+		RecentAC       []models.LCRecentProblem        `json:"recent_ac"`
 	}
 	if err := json.Unmarshal(stat.RawData, &raw); err != nil {
 		return d
@@ -286,6 +380,7 @@ func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 	if raw.Contest != nil {
 		d.ContestRating = raw.Contest.ContestRating
 		d.ContestAttend = raw.Contest.ContestAttend
+		d.TopPercentage = raw.Contest.ContestTopPercentage
 	}
 	if raw.Skill != nil {
 		all := append(raw.Skill.Data.Fundamental, raw.Skill.Data.Intermediate...)
@@ -293,5 +388,49 @@ func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 		d.Skills = all
 	}
 	d.Calendar = raw.Calendar
+	if len(raw.Calendar) > 0 {
+		d.Streak = calcStreak(raw.Calendar)
+	}
+	if len(raw.LanguageStats) > 0 {
+		d.LanguageStats = make(map[string]int, len(raw.LanguageStats))
+		for _, l := range raw.LanguageStats {
+			d.LanguageStats[l.LanguageName] = l.ProblemsSolved
+		}
+	}
+	// Keep last 20 contests only (most recent first from API).
+	hist := raw.ContestHistory
+	if len(hist) > 20 {
+		hist = hist[len(hist)-20:]
+	}
+	d.ContestHistory = hist
+	d.RecentAC = raw.RecentAC
 	return d
+}
+
+// calcStreak counts consecutive days with at least one submission, counting back from today.
+func calcStreak(calendar map[string]int) int {
+	now := time.Now().UTC()
+	streak := 0
+	for {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day()-streak, 0, 0, 0, 0, time.UTC).Unix()
+		found := false
+		for ts, count := range calendar {
+			tsInt, err := strconv.ParseInt(ts, 10, 64)
+			if err != nil {
+				continue
+			}
+			if tsInt >= dayStart && tsInt < dayStart+86400 && count > 0 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+		streak++
+		if streak > 365 {
+			break
+		}
+	}
+	return streak
 }

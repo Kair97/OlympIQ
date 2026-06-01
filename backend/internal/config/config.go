@@ -21,7 +21,11 @@ type Config struct {
 	GeminiAPIKey string
 	GeminiModel  string
 
-	LeetCodeAPIURL string
+	N8NAnalyzerURL string
+	N8NRoadmapURL  string
+
+	LeetCodeAPIURL       string
+	LeetCodePublicAPIURL string // used in n8n payloads — must be reachable from the internet
 }
 
 // Load reads all configuration from environment variables with sensible defaults.
@@ -41,7 +45,11 @@ func Load() *Config {
 		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.0-flash"),
 
-		LeetCodeAPIURL: getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
+		N8NAnalyzerURL: os.Getenv("N8N_ANALYZER_URL"),
+		N8NRoadmapURL:  os.Getenv("N8N_ROADMAP_URL"),
+
+		LeetCodeAPIURL:       getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
+		LeetCodePublicAPIURL: getEnv("LEETCODE_PUBLIC_API_URL", "https://alfa-leetcode-api.onrender.com"),
 	}
 }
 

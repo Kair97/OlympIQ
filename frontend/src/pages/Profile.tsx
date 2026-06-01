@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { useStatsStore } from '../store/statsStore'
 import {
   updateProfile, deleteProfile, connectAccount,
   disconnectAccount, syncAccounts, getAccounts,
@@ -114,6 +115,7 @@ const PLATFORM_CONFIG = [
 
 export default function Profile() {
   const { user, setUser } = useAuthStore()
+  const setGlobalAccounts = useStatsStore(s => s.setAccounts)
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
   const [flash, setFlash] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState('')
@@ -132,9 +134,13 @@ export default function Profile() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
 
   useEffect(() => {
-    getAccounts().then(a => setAccounts(a ?? [])).catch(() => {})
+    getAccounts().then(a => {
+      const list = a ?? []
+      setAccounts(list)
+      setGlobalAccounts(list)        // keep sidebar in sync on mount
+    }).catch(() => {})
     getSessions().then(s => setSessions(s ?? [])).catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function notify(msg: string, type: 'ok' | 'err' = 'ok') {
     setFlash({ msg, type })
@@ -165,7 +171,11 @@ export default function Profile() {
     setConnecting(null)
     try {
       const acc = await connectAccount(platform, handle)
-      setAccounts(prev => [...prev.filter(a => a.platform !== platform), acc])
+      setAccounts(prev => {
+        const updated = [...prev.filter(a => a.platform !== platform), acc]
+        setGlobalAccounts(updated)   // update sidebar dot instantly
+        return updated
+      })
       notify(`${platform} connected — click Sync to load stats`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : `Failed to connect ${platform}`
@@ -177,7 +187,11 @@ export default function Profile() {
     setDisconnecting(null)
     try {
       await disconnectAccount(platform)
-      setAccounts(prev => prev.filter(a => a.platform !== platform))
+      setAccounts(prev => {
+        const updated = prev.filter(a => a.platform !== platform)
+        setGlobalAccounts(updated)   // update sidebar dot instantly → turns red
+        return updated
+      })
       notify(`${platform} disconnected`)
     } catch { notify('Failed to disconnect', 'err') }
   }

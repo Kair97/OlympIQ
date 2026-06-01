@@ -1,0 +1,137 @@
+## OlympIQ — n8n Integration Overview
+
+Replace all Telegram nodes with HTTP Request nodes pointing to this backend.
+
+---
+
+## BASE URL
+
+Development:  http://localhost:8080/api/v1
+Production:   https://yourdomain.com/api/v1
+
+All responses follow:
+  { "success": true/false, "data": {...}, "error": "string or null" }
+
+---
+
+## AUTHENTICATION
+
+OlympIQ uses httpOnly cookie-based JWT auth.
+n8n cannot use cookies directly — for internal automation, add a dedicated
+API key middleware OR use the service account login flow:
+
+Step 1 — Login to get session cookies:
+  POST /auth/login
+  Body: { "email": "admin@olympiq.com", "password": "your-password" }
+  Response: sets access_token + refresh_token as httpOnly cookies
+
+Step 2 — In all subsequent n8n HTTP Request nodes:
+  - Enable "Send Cookies" option
+  - OR extract the access_token from the login response Set-Cookie header
+    and send it as: Cookie: access_token=<value>
+
+Recommended: Create a dedicated internal admin account for n8n automation.
+
+---
+
+## ENDPOINTS N8N SHOULD CALL
+
+### 1. Health check (no auth needed)
+  GET /health
+  Use in: Docker Error Watcher — check if backend is up
+
+### 2. Trigger stats sync for all users
+  POST /accounts/sync
+  Auth: required
+  Use in: After Session Brain Update — refresh user data after code changes
+
+### 3. Get dashboard data (verify data looks correct)
+  GET /dashboard
+  Auth: required
+  Use in: Morning Briefing — read user stats to include in briefing
+
+### 4. Get roadmap
+  GET /roadmap
+  Auth: required
+  Use in: Morning Briefing — show what's in the current roadmap
+
+### 5. Get recommendations
+  GET /recommendations
+  Auth: required
+  Use in: Morning Briefing — show today's suggested problems
+
+### 6. Test AI connection
+  GET /ai/test
+  Auth: required
+  Use in: Docker Error Watcher — check if Gemini API is responding
+
+---
+
+## WHAT TO DO INSTEAD OF TELEGRAM
+
+Replace every "Send to Telegram" node with one of these:
+
+### Option A — Write to a log file (simplest)
+  Use: Write File node
+  Path: C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\Sessions\n8n-log.md
+  Append mode: ON
+  Content: markdown-formatted summary with date + findings
+
+### Option B — POST to a webhook you build in OlympIQ
+  Add a new backend route: POST /internal/notify
+  Body: { "type": "session_update" | "error" | "briefing", "message": "string", "data": {} }
+  This route writes to a notifications table or logs file
+  n8n calls this endpoint after each workflow run
+
+### Option C — Write directly to vault files (what vault already tracks)
+  After Session Brain Update → append to OlympIQ_vault/06 - Active Issues.md
+  Docker Error Watcher → append to OlympIQ_vault/06 - Active Issues.md
+  Morning Briefing → write to OlympIQ_vault/Sessions/morning-briefing.md
+
+---
+
+## DOCKER COMMANDS FOR N8N EXECUTE COMMAND NODES
+
+Working directory: C:\Users\orynb\Desktop\OlympIQ
+
+Get backend logs (last 50 lines, last 5 min):
+  docker logs olympiq-backend --tail 50 --since 5m
+
+Check for errors in logs:
+  docker logs olympiq-backend --tail 100 2>&1 | findstr /i "error panic fatal 500"
+
+Restart backend after code change:
+  docker-compose restart backend
+
+Run DB migrations:
+  docker-compose exec backend ./migrate up
+
+Get git log (last 10 commits):
+  git -C C:\Users\orynb\Desktop\OlympIQ log --oneline -10
+
+Get changed files since last commit:
+  git -C C:\Users\orynb\Desktop\OlympIQ diff --name-only HEAD~1
+
+---
+
+## PORT MAP
+
+Backend API:     localhost:8080
+Frontend:        localhost:3000
+PostgreSQL:      localhost:5432
+Redis:           localhost:6379
+LeetCode proxy:  localhost:3002
+Grafana:         localhost:3001
+Prometheus:      localhost:9090
+
+---
+
+## KEY FILES TO READ/WRITE IN N8N FILE NODES
+
+Read these for context:
+  C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\01 - Project Status.md
+  C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\06 - Active Issues.md
+
+Append session results to:
+  C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\Sessions\README.md
+  C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\06 - Active Issues.md

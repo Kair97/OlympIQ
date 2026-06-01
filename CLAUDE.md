@@ -19,6 +19,78 @@ Students connect their Codeforces and LeetCode accounts, and the platform:
 
 ---
 
+## Vault protocol
+
+The vault at `OlympIQ_vault/` is the fastest way to load project context — prefer it over re-reading code.
+
+| Task | Read in order |
+|------|--------------|
+| Backend work | `06 - Active Issues.md` → `Backend/04 - Backend.md` |
+| Frontend work | `06 - Active Issues.md` → `Frontend/05 - Frontend.md` |
+| Architecture / DB | `03 - Architecture.md` |
+| Full orientation | All notes `00 - Index.md` through `07 - Decisions Log.md` |
+
+---
+
+## Brain update protocol — MANDATORY after every task
+
+**This is not optional. After finishing any piece of work — fix, feature, improvement — you MUST write to the vault. No exceptions.**
+
+### What to update and where
+
+| Event | Where to write |
+|-------|---------------|
+| Bug fixed | Add a row to `06 - Active Issues.md` "Recently Fixed" table: date, what broke, exact fix |
+| New bug or blocker discovered | Add to `06 - Active Issues.md` "In Progress" section immediately |
+| Feature completed | Update `01 - Project Status.md` — mark step done, update "Files modified", update "Next tasks" |
+| Architectural decision made | Add entry to `07 - Decisions Log.md` with the decision and WHY |
+| "Gotcha" discovered (API quirk, env issue, library behavior) | Add to `06 - Active Issues.md` "Watch List" |
+| Session ends | Append a bullet to `Sessions/README.md` with: date, what was done, what was fixed, what's next |
+
+### What counts as "every fk thing"
+
+- A 500 was caused by X → write the root cause and fix
+- An env var was wrong → write the correct format
+- An API returns data in unexpected shape → write the shape
+- A CSS class was missing → write what was added and why
+- A workflow pattern was discovered → write it so it's never rediscovered
+- Anything that took more than 5 minutes to debug → write it
+
+### The goal
+
+The vault is a brain. Each session it gets smarter. Claude reads the brain at the start of every session. If you write the lesson, Claude will never repeat that mistake. If you don't write it, Claude will make the same mistake next time.
+
+**Read vault at start → Do work → Write lessons to vault → Next session is smarter.**
+
+### ⚠️ NON-NEGOTIABLE RULE
+
+After EVERY response where you changed code, fixed a bug, added a feature, or discovered anything new:
+1. Update `OlympIQ_vault/06 - Active Issues.md` — add to Recently Fixed or Watch List
+2. Update `OlympIQ_vault/01 - Project Status.md` — sync modified files and next tasks
+3. If it was a session with multiple changes, add one line to `OlympIQ_vault/Sessions/README.md`
+
+If you skip this, the user will ask the same question again next session. Do not skip it.
+
+---
+
+## n8n AI Agents
+
+Two production agents. Both use `When Last Node Finishes` mode. Backend unwraps `[{"output":"..."}]` envelope automatically.
+
+| Agent | Webhook URL | Input format |
+|-------|-------------|-------------|
+| Problem Analyzer | `https://kair97.app.n8n.cloud/webhook/olympiq-problem-analysis` | `{ "problem_url": "string" }` |
+| Roadmap Generator | `https://kair97.app.n8n.cloud/webhook/coding-roadmap` | See payload builder in `callN8NRoadmap()` |
+
+**Analyzer** — called from `ai_service.go:AnalyzeProblem()` when `N8N_ANALYZER_URL` is set in `.env`
+**Roadmap** — called from `ai_service.go:GenerateRoadmap()` when `N8N_ROADMAP_URL` is set in `.env`
+
+Both fall back to Gemini if the env var is empty.
+
+User data for roadmap is fetched live from Codeforces API + alfa-leetcode-api before the n8n call — the payload always contains real stats, never hardcoded sample data.
+
+---
+
 ## Design system
 
 Build the React + TypeScript + Tailwind frontend **matching the design in `OlympIQ - Atelier (standalone).html`**. Use the source files in `shared/` and `atelier.html` as your reference for component structure, CSS variable names, and visual treatment. Follow `HANDOFF.md` for the port plan.

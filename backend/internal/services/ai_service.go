@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -38,26 +39,31 @@ type StudentContext struct {
 	LCContestRating float64
 	LCWeakTopics    []string
 	LCSolvedSlugs   []string
+	LCTopics        map[string]int // full topic → problems_solved map
 
 	Goals *models.UserGoal
 }
 
-// AIService handles Gemini API calls for roadmap, razbor, and recommendations.
+// AIService handles AI calls for roadmap, razbor, and recommendations.
+// Uses n8n webhooks when configured; falls back to Gemini otherwise.
 type AIService struct {
-	apiKey    string
-	model     string
-	http      *http.Client
-	platforms repository.PlatformRepository
-	stats     repository.StatsRepository
-	goals     repository.GoalsRepository
-	cache     CacheStore
-	cf        *CodeforcesService
-	lc        *LeetCodeService
+	apiKey            string
+	model             string
+	n8nAnalyzerURL    string
+	n8nRoadmapURL     string
+	lcPublicAPIURL    string // public alfa-leetcode-api URL used in n8n payloads
+	http              *http.Client
+	platforms         repository.PlatformRepository
+	stats             repository.StatsRepository
+	goals             repository.GoalsRepository
+	cache             CacheStore
+	cf                *CodeforcesService
+	lc                *LeetCodeService
 }
 
-// NewAIService constructs an AIService backed by Google Gemini.
+// NewAIService constructs an AIService.
 func NewAIService(
-	apiKey, model string,
+	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL, lcPublicAPIURL string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -66,19 +72,47 @@ func NewAIService(
 	lc *LeetCodeService,
 ) *AIService {
 	return &AIService{
-		apiKey:    apiKey,
-		model:     model,
-		http:      &http.Client{Timeout: 90 * time.Second},
-		platforms: platforms,
-		stats:     stats,
-		goals:     goals,
-		cache:     cache,
-		cf:        cf,
-		lc:        lc,
+		apiKey:         apiKey,
+		model:          model,
+		n8nAnalyzerURL: n8nAnalyzerURL,
+		n8nRoadmapURL:  n8nRoadmapURL,
+		lcPublicAPIURL: lcPublicAPIURL,
+		http:           &http.Client{Timeout: 90 * time.Second},
+		platforms:      platforms,
+		stats:          stats,
+		goals:          goals,
+		cache:          cache,
+		cf:             cf,
+		lc:             lc,
 	}
 }
 
+// lcProblemURLToAPIURL converts a leetcode.com problem URL into the equivalent
+// alfa-leetcode-api /select endpoint URL so n8n can fetch problem data without
+// hitting leetcode.com directly (which returns 403 to non-browser requests).
+//
+//	https://leetcode.com/problems/two-sum/           → {base}/select?titleSlug=two-sum
+//	https://leetcode.com/problems/two-sum/description/ → same
+func (s *AIService) lcProblemURLToAPIURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || !strings.Contains(parsed.Host, "leetcode.com") {
+		return rawURL // not a LC URL — return as-is (e.g. Codeforces)
+	}
+	// Path looks like /problems/{titleSlug} or /problems/{titleSlug}/description/...
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for i, p := range parts {
+		if p == "problems" && i+1 < len(parts) && parts[i+1] != "" {
+			slug := parts[i+1]
+			base := strings.TrimRight(s.lcPublicAPIURL, "/")
+			return base + "/select?titleSlug=" + slug
+		}
+	}
+	return rawURL
+}
+
 // BuildStudentContext assembles all user data for AI prompts.
+// It fetches live data from CF and LC APIs (using Redis cache where available).
+// Returns ErrBadRequest if no platforms are connected.
 func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (*StudentContext, error) {
 	sc := &StudentContext{}
 
@@ -86,19 +120,24 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
+	if len(accounts) == 0 {
+		return nil, fmt.Errorf("%w: no platforms connected — connect Codeforces or LeetCode in your profile first, then sync", ErrBadRequest)
+	}
 
 	for _, acc := range accounts {
 		switch acc.Platform {
 		case "codeforces":
 			sc.CFHandle = acc.Handle
-			info, _ := s.cf.GetUserInfo(ctx, acc.Handle)
-			if info != nil {
+
+			info, cfErr := s.cf.GetUserInfo(ctx, acc.Handle)
+			if cfErr == nil && info != nil {
 				sc.CFRating = info.Rating
 				sc.CFRank = info.Rank
 				sc.CFMaxRating = info.MaxRating
 			}
+
 			subs, _ := s.cf.GetSubmissions(ctx, acc.Handle, 500)
-			if subs != nil {
+			if len(subs) > 0 {
 				sc.CFTagFreq = BuildTagFrequency(subs)
 				seen := make(map[string]bool)
 				for _, sub := range subs {
@@ -111,15 +150,17 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 					}
 				}
 			}
+
 			hist, _ := s.cf.GetRatingHistory(ctx, acc.Handle)
-			if len(hist) > 5 {
-				sc.CFRecentRating = hist[len(hist)-5:]
+			if len(hist) > 24 {
+				sc.CFRecentRating = hist[len(hist)-24:]
 			} else {
 				sc.CFRecentRating = hist
 			}
 
 		case "leetcode":
 			sc.LCHandle = acc.Handle
+
 			profile, _ := s.lc.GetProfile(ctx, acc.Handle)
 			if profile != nil {
 				sc.LCRanking = profile.Ranking
@@ -128,19 +169,26 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 				sc.LCMedium = profile.MediumSolved
 				sc.LCHard = profile.HardSolved
 			}
+
 			contest, _ := s.lc.GetContest(ctx, acc.Handle)
 			if contest != nil {
 				sc.LCContestRating = contest.ContestRating
 			}
+
+			// Fetch all accepted submissions for solved list
 			subs, _ := s.lc.GetAcSubmissions(ctx, acc.Handle)
 			for _, sub := range subs {
 				sc.LCSolvedSlugs = append(sc.LCSolvedSlugs, sub.TitleSlug)
 			}
+
+			// Fetch full topic skill breakdown
 			skill, _ := s.lc.GetSkill(ctx, acc.Handle)
 			if skill != nil {
 				allTags := append(skill.Data.Fundamental, skill.Data.Intermediate...)
 				allTags = append(allTags, skill.Data.Advanced...)
+				sc.LCTopics = make(map[string]int, len(allTags))
 				for _, t := range allTags {
+					sc.LCTopics[t.TagName] = t.ProblemsSolved
 					if t.ProblemsSolved < 5 {
 						sc.LCWeakTopics = append(sc.LCWeakTopics, t.TagName)
 					}
@@ -160,16 +208,212 @@ func (s *AIService) TestConnection(ctx context.Context) (string, error) {
 	return s.callGemini(ctx, "You are a helpful assistant.", "Reply with exactly: OlympIQ AI is working!")
 }
 
-// GenerateRoadmap calls Gemini and returns the JSON roadmap string.
+// GenerateRoadmap generates a roadmap. Uses n8n webhook if configured, otherwise Gemini.
+// Falls back to Gemini if n8n returns an empty or invalid response.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
+	if s.n8nRoadmapURL != "" {
+		result, err := s.callN8NRoadmap(ctx, sc, mode)
+		if err == nil && result != "" {
+			return result, nil
+		}
+		// n8n failed or returned empty — fall back to Gemini
+	}
 	userMsg := buildRoadmapUserMessage(sc, mode)
 	return s.callGemini(ctx, roadmapSystemPrompt, userMsg)
 }
 
-// AnalyzeProblem calls Gemini and returns the JSON razbor string.
+// callN8NRoadmap sends the full user context to the n8n roadmap webhook.
+// It builds the exact payload format the n8n agent expects.
+func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
+	// Pick username — prefer CF handle, fall back to LC
+	username := sc.CFHandle
+	if username == "" {
+		username = sc.LCHandle
+	}
+
+	weeklyHours := 15
+	if sc.Goals != nil && sc.Goals.WeeklyHours != nil {
+		weeklyHours = *sc.Goals.WeeklyHours
+	}
+
+	payload := map[string]interface{}{
+		"username":     username,
+		"mode":         "all",
+		"weekly_hours": weeklyHours,
+	}
+
+	// Codeforces data
+	if sc.CFHandle != "" {
+		cfTopics := sc.CFTagFreq
+		if cfTopics == nil {
+			cfTopics = make(map[string]int)
+		}
+		ratingHistory := make([]int, 0, len(sc.CFRecentRating))
+		for _, r := range sc.CFRecentRating {
+			ratingHistory = append(ratingHistory, r.NewRating)
+		}
+		payload["codeforces"] = map[string]interface{}{
+			"rating":          sc.CFRating,
+			"rank":            orNA(sc.CFRank),
+			"problems_solved": len(sc.CFSolvedKeys),
+			"topics":          cfTopics,
+			"rating_history":  ratingHistory,
+		}
+	}
+
+	// LeetCode data
+	if sc.LCHandle != "" {
+		lcTopics := sc.LCTopics
+		if lcTopics == nil {
+			lcTopics = make(map[string]int)
+		}
+		payload["leetcode"] = map[string]interface{}{
+			"total_solved": sc.LCTotalSolved,
+			"easy":         sc.LCEasy,
+			"medium":       sc.LCMedium,
+			"hard":         sc.LCHard,
+			"topics":       lcTopics,
+		}
+	}
+
+	// Goals
+	if sc.Goals != nil {
+		payload["goal"] = sc.Goals.GoalType
+		if sc.Goals.TargetDate != nil {
+			payload["deadline"] = sc.Goals.TargetDate.Format("2006-01-02")
+		}
+		if sc.Goals.TargetRating != nil {
+			payload["target_rating"] = *sc.Goals.TargetRating
+		}
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build n8n roadmap request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nRoadmapURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: n8n roadmap request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read n8n roadmap response: %v", ErrExternal, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: n8n roadmap returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	// Unwrap n8n envelope: [{"output":"...json..."}]
+	cleaned := stripMarkdownFences(strings.TrimSpace(string(respBody)))
+	if strings.HasPrefix(cleaned, "[") {
+		var envelope []map[string]json.RawMessage
+		if json.Unmarshal([]byte(cleaned), &envelope) == nil && len(envelope) > 0 {
+			for _, key := range []string{"output", "json", "text", "result"} {
+				if raw, ok := envelope[0][key]; ok {
+					inner := strings.TrimSpace(string(raw))
+					if strings.HasPrefix(inner, `"`) {
+						var s string
+						if json.Unmarshal(raw, &s) == nil {
+							cleaned = stripMarkdownFences(s)
+							break
+						}
+					} else {
+						cleaned = inner
+						break
+					}
+				}
+			}
+		}
+	}
+	return cleaned, nil
+}
+
+// AnalyzeProblem analyzes a problem. Uses n8n webhook if configured, otherwise Gemini.
+// Falls back to Gemini if n8n returns an empty or invalid response.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
+	if s.n8nAnalyzerURL != "" {
+		result, err := s.callN8NAnalyzer(ctx, problemURL)
+		if err == nil && result != "" {
+			return result, nil
+		}
+		// n8n failed or returned empty — fall back to Gemini
+	}
 	userMsg := fmt.Sprintf("Analyze this competitive programming problem:\n\nURL: %s\n\nProvide a complete educational razbor. Do not write any working solution code.", sanitize(problemURL))
 	return s.callGemini(ctx, razborSystemPrompt, userMsg)
+}
+
+// callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
+// LeetCode problem URLs are transformed to the public alfa-leetcode-api /select endpoint
+// so n8n (a cloud service) can fetch problem data without hitting leetcode.com directly.
+func (s *AIService) callN8NAnalyzer(ctx context.Context, problemURL string) (string, error) {
+	// Transform LC URLs: leetcode.com/problems/{slug}/ → alfa-leetcode-api.onrender.com/select?titleSlug={slug}
+	n8nURL := s.lcProblemURLToAPIURL(sanitize(problemURL))
+
+	body, err := json.Marshal(map[string]string{
+		"problem_url": n8nURL,
+	})
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build n8n request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nAnalyzerURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: n8n request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read n8n response: %v", ErrExternal, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: n8n returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	// n8n may wrap the JSON in an array: [{ "output": "{...}" }] or return the object directly.
+	// Try direct parse first, then unwrap n8n's default array envelope.
+	cleaned := stripMarkdownFences(strings.TrimSpace(string(respBody)))
+
+	// If it starts with '[', unwrap the first element's "output" or "json" field.
+	if strings.HasPrefix(cleaned, "[") {
+		var envelope []map[string]json.RawMessage
+		if json.Unmarshal([]byte(cleaned), &envelope) == nil && len(envelope) > 0 {
+			for _, key := range []string{"output", "json", "text", "result", "analysis"} {
+				if raw, ok := envelope[0][key]; ok {
+					inner := strings.TrimSpace(string(raw))
+					// raw may be a JSON string (quoted) or a JSON object
+					if strings.HasPrefix(inner, `"`) {
+						var s string
+						if json.Unmarshal(raw, &s) == nil {
+							cleaned = stripMarkdownFences(s)
+							break
+						}
+					} else {
+						cleaned = inner
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return cleaned, nil
 }
 
 // GenerateRecommendations calls Gemini and returns a JSON array of problems.
@@ -231,10 +475,10 @@ func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: failed to parse Gemini response (status %d): %v", ErrExternal, resp.StatusCode, err)
 	}
 	if result.Error != nil {
-		return "", fmt.Errorf("%w: %s", ErrExternal, result.Error.Message)
+		return "", fmt.Errorf("%w: Gemini error: %s", ErrExternal, result.Error.Message)
 	}
 	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
 		return stripMarkdownFences(result.Candidates[0].Content.Parts[0].Text), nil

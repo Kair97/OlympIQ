@@ -1,0 +1,156 @@
+You are an expert n8n workflow architect. I need you to generate a complete, importable n8n workflow JSON for my software development project.
+
+Read everything below carefully. Then output the full n8n workflow JSON I can import directly into n8n.
+
+---
+
+## PROJECT CONTEXT
+
+I am building OlympIQ — an AI-powered competitive programming training platform.
+- Stack: Go (Fiber) backend, React + TypeScript frontend, PostgreSQL, Redis, Docker Compose, Claude/Gemini AI API
+- Repo: C:\Users\orynb\Desktop\OlympIQ (Windows, WSL available)
+- I work with Claude Code (AI coding assistant in terminal/VSCode)
+- I have an Obsidian vault at OlympIQ_vault/ that acts as a "brain" — it stores project state, bugs, fixes, decisions
+
+---
+
+## THE PROBLEM I AM SOLVING
+
+Every time I work with Claude Code on this project, Claude:
+1. Fixes bugs
+2. Adds features
+3. Makes architectural decisions
+4. Discovers "gotchas" (API quirks, env issues, etc.)
+
+But if these lessons are not written into the Obsidian vault, Claude forgets them next session and repeats the same mistakes. I need n8n to automate writing lessons into the vault after every session.
+
+---
+
+## VAULT FILE STRUCTURE
+
+The Obsidian vault lives at: C:\Users\orynb\Desktop\OlympIQ\OlympIQ_vault\
+
+Key files:
+- 01 - Project Status.md       → current build step, modified files, next tasks
+- 02 - Build Checklist.md      → 22 build steps with ✅/🔄/⬜ status
+- 06 - Active Issues.md        → bugs, fixes, watch list (THE MOST IMPORTANT FILE)
+- 07 - Decisions Log.md        → architectural decisions + why
+- Sessions/README.md           → one-line per session log
+
+Format for 06 - Active Issues.md "Recently Fixed" table row:
+| Date | What broke | Fix applied |
+
+Format for 07 - Decisions Log.md entry:
+### [Decision title]
+- **Date:** YYYY-MM-DD
+- **Decision:** what was chosen
+- **Why:** the reason
+- **Alternative rejected:** what else was considered
+
+---
+
+## THE 3 WORKFLOWS I NEED
+
+### WORKFLOW 1 — "After Session Brain Update"
+
+**Trigger:** Manual webhook (I call it after finishing a Claude Code session) OR scheduled every day at 23:00
+
+**What it does:**
+1. Run `git log --oneline -10` in the repo directory → get last 10 commits
+2. Run `git diff HEAD~5..HEAD --stat` → get summary of what changed
+3. Run `git status` → get uncommitted file list
+4. Send all this data to Claude API (claude-sonnet-4-6) with this system prompt:
+
+```
+You are a project brain updater for OlympIQ. Analyze the git changes provided and extract:
+1. Bugs that were fixed (from commit messages and diff)
+2. New features added
+3. Architectural decisions made
+4. Any "gotchas" or lessons learned from the changes
+
+Return a JSON object with these fields:
+{
+  "fixes": [{ "what_broke": "string", "fix_applied": "string" }],
+  "features_done": ["string"],
+  "decisions": [{ "title": "string", "decision": "string", "why": "string" }],
+  "gotchas": ["string"],
+  "next_tasks": ["string"],
+  "session_summary": "one sentence summary of what was done"
+}
+```
+
+5. Parse the Claude JSON response
+6. Append new rows to "Recently Fixed" table in `06 - Active Issues.md`
+7. Append new entries to `07 - Decisions Log.md` if any decisions
+8. Append new items to "Watch List" in `06 - Active Issues.md` if any gotchas
+9. Update "Last significant work" section in `01 - Project Status.md`
+10. Append one-line entry to `Sessions/README.md`
+11. Send me a Telegram message (or Discord webhook) with the summary
+
+---
+
+### WORKFLOW 2 — "Docker Error Watcher"
+
+**Trigger:** Schedule — runs every 5 minutes while Docker is running
+
+**What it does:**
+1. Run `docker logs olympiq-backend --tail 50 --since 5m` to get recent logs
+2. Run `docker logs olympiq-frontend --tail 20 --since 5m`
+3. Check if any log line contains: "error", "panic", "fatal", "500", "FAIL"
+4. If errors found: send to Claude API to classify the error (is it a known issue? new issue? critical?)
+5. If new/critical error: append to `06 - Active Issues.md` "In Progress" section
+6. Send Telegram/Discord notification with the error details
+
+---
+
+### WORKFLOW 3 — "Morning Briefing"
+
+**Trigger:** Schedule — every day at 08:00
+
+**What it does:**
+1. Read `01 - Project Status.md` from disk
+2. Read `06 - Active Issues.md` from disk
+3. Send both to Claude API with prompt:
+
+```
+You are a project manager. Based on this project status and active issues, generate a concise morning briefing with:
+1. Current build step and what % is done
+2. Top 3 priorities for today
+3. Any blockers to watch out for
+4. Estimated time to complete if working 4 hours today
+
+Keep it under 150 words. Be direct and specific.
+```
+
+4. Send the briefing to Telegram/Discord
+
+---
+
+## TECHNICAL REQUIREMENTS FOR THE WORKFLOW
+
+- Use the **Execute Command** node (or SSH node) to run git and docker commands
+- Working directory for all commands: `C:\Users\orynb\Desktop\OlympIQ`
+- Use **Read/Write File** nodes to read and append to vault .md files
+- Use **HTTP Request** node to call Claude API:
+  - URL: https://api.anthropic.com/v1/messages
+  - Headers: x-api-key: {{$env.ANTHROPIC_API_KEY}}, anthropic-version: 2023-06-01, content-type: application/json
+  - Model: claude-sonnet-4-6
+  - Max tokens: 2000
+- Use **Function** nodes for string manipulation (appending markdown table rows, etc.)
+- Use environment variables for secrets: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+- All workflows should have proper error handling — if any step fails, send an error notification instead of silently failing
+
+---
+
+## OUTPUT FORMAT
+
+Generate the complete n8n workflow as a single JSON object I can import via n8n Settings → Import from file.
+
+Include all 3 workflows as separate workflows in the export, or as one combined workflow with clear section labels.
+
+Make sure every node has:
+- A clear, descriptive name
+- Proper connections to next nodes
+- Error handling where needed
+
+If you cannot generate the full JSON in one response, generate Workflow 1 first (it is the most important), then 2 and 3.
