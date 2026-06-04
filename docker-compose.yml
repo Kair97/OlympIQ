@@ -41,6 +41,22 @@ services:
       retries: 3
       start_period: 20s
 
+  task-recommender:
+    build:
+      context: ./task-recommender
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - task_recommender_db:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -54,10 +70,13 @@ services:
       DATABASE_URL: postgres://olympiq:password@postgres:5432/olympiq?sslmode=disable
       REDIS_URL: redis://redis:6379
       LEETCODE_API_URL: http://leetcode-api:3000
+      TASK_RECOMMENDER_URL: http://task-recommender:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      task-recommender:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
@@ -111,3 +130,4 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  task_recommender_db:

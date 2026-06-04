@@ -26,6 +26,7 @@ type Config struct {
 
 	LeetCodeAPIURL       string
 	LeetCodePublicAPIURL string // used in n8n payloads — must be reachable from the internet
+	TaskRecommenderURL   string
 }
 
 // Load reads all configuration from environment variables with sensible defaults.
@@ -50,6 +51,7 @@ func Load() *Config {
 
 		LeetCodeAPIURL:       getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
 		LeetCodePublicAPIURL: getEnv("LEETCODE_PUBLIC_API_URL", "https://alfa-leetcode-api.onrender.com"),
+		TaskRecommenderURL:   getEnv("TASK_RECOMMENDER_URL", "http://task-recommender:8000"),
 	}
 }
 

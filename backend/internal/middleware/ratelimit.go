@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,19 +10,20 @@ import (
 	"olympiq/backend/internal/services"
 )
 
-// RateLimit returns a Redis sliding-window rate limiter middleware.
+// RateLimit returns a fixed-window rate limiter middleware backed by Redis.
+// The counter resets after window duration from the first request in that window.
 func RateLimit(cache services.CacheStore, max int, window time.Duration, group string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		key := fmt.Sprintf("ratelimit:%s:%s:%s", group, c.IP(), c.Method())
+		key := fmt.Sprintf("ratelimit:%s:%s", group, c.IP())
 		ctx := context.Background()
 
-		val, err := cache.Get(ctx, key)
-		count := 0
-		if err == nil {
-			count, _ = strconv.Atoi(val)
+		count, err := cache.Incr(ctx, key, window)
+		if err != nil {
+			// Redis unavailable — fail open so the app still works
+			return c.Next()
 		}
 
-		if count >= max {
+		if count > int64(max) {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"success": false,
 				"data":    nil,
@@ -31,12 +31,6 @@ func RateLimit(cache services.CacheStore, max int, window time.Duration, group s
 			})
 		}
 
-		newVal := strconv.Itoa(count + 1)
-		if count == 0 {
-			_ = cache.Set(ctx, key, newVal, window)
-		} else {
-			_ = cache.Set(ctx, key, newVal, window)
-		}
 		return c.Next()
 	}
 }

@@ -29,3 +29,16 @@ func (r *RedisCache) Set(ctx context.Context, key, value string, ttl time.Durati
 func (r *RedisCache) Del(ctx context.Context, keys ...string) error {
 	return r.client.Del(ctx, keys...).Err()
 }
+
+// Incr atomically increments key and sets TTL on the first call.
+func (r *RedisCache) Incr(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	n, err := r.client.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	if n == 1 {
+		// First increment — set expiry so the window resets correctly
+		_ = r.client.Expire(ctx, key, ttl).Err()
+	}
+	return n, nil
+}
