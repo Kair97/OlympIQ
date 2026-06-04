@@ -8,7 +8,7 @@ import { getAccounts } from '../../api/profile'
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', glyph: '◐' },
   { to: '/analyzer',  label: 'Analyzer',  glyph: '▣' },
-  { to: '/roadmap',   label: 'Roadmap',   glyph: '↗' },
+  { to: '/recommender', label: 'Recommender', glyph: '✦' },
   { to: '/profile',   label: 'Profile',   glyph: '○' },
 ]
 

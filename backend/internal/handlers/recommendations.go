@@ -10,15 +10,17 @@ import (
 
 // RecommendationsHandler handles /api/v1/recommendations.
 type RecommendationsHandler struct {
-	ai *services.AIService
+	ai  *services.AIService
+	rec *services.TaskRecommenderService
 }
 
 // NewRecommendationsHandler constructs a RecommendationsHandler.
-func NewRecommendationsHandler(ai *services.AIService) *RecommendationsHandler {
-	return &RecommendationsHandler{ai: ai}
+func NewRecommendationsHandler(ai *services.AIService, rec *services.TaskRecommenderService) *RecommendationsHandler {
+	return &RecommendationsHandler{ai: ai, rec: rec}
 }
 
 // List handles GET /recommendations.
+// Uses the ML TaskRecommender microservice when available; falls back to Gemini.
 func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 	uid, err := userUUID(c)
 	if err != nil {
@@ -27,12 +29,23 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 
 	topic := c.Query("topic", "")
 	mode := c.Query("mode", "general")
+	topK := 10
 
 	sc, err := h.ai.BuildStudentContext(c.Context(), uid)
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
 
+	// ── Try ML microservice first ─────────────────────────────────────────────
+	if h.rec != nil {
+		mlRecs, mlErr := h.rec.Recommend(c.Context(), sc, topic, topK)
+		if mlErr == nil && len(mlRecs) > 0 {
+			return ok(c, mlRecs)
+		}
+		// microservice unavailable or returned nothing — fall through to Gemini
+	}
+
+	// ── Gemini fallback ───────────────────────────────────────────────────────
 	raw, err := h.ai.GenerateRecommendations(c.Context(), sc, topic, mode)
 	if err != nil {
 		return mapServiceErr(c, err)

@@ -11,11 +11,12 @@ type AccountsHandler struct {
 	accounts *services.AccountsService
 	stats    *services.StatsService
 	ai       *services.AIService
+	rec      *services.TaskRecommenderService
 }
 
 // NewAccountsHandler constructs an AccountsHandler.
-func NewAccountsHandler(accounts *services.AccountsService, stats *services.StatsService, ai *services.AIService) *AccountsHandler {
-	return &AccountsHandler{accounts: accounts, stats: stats, ai: ai}
+func NewAccountsHandler(accounts *services.AccountsService, stats *services.StatsService, ai *services.AIService, rec *services.TaskRecommenderService) *AccountsHandler {
+	return &AccountsHandler{accounts: accounts, stats: stats, ai: ai, rec: rec}
 }
 
 // ListAccounts handles GET /accounts — returns all connected platform accounts.
@@ -65,6 +66,8 @@ func (h *AccountsHandler) Disconnect(c *fiber.Ctx) error {
 }
 
 // Sync handles POST /accounts/sync.
+// After syncing platform stats it also registers the user with the ML recommender
+// in the background so future recommendations are personalised immediately.
 func (h *AccountsHandler) Sync(c *fiber.Ctx) error {
 	uid, err := userUUID(c)
 	if err != nil {
@@ -73,6 +76,18 @@ func (h *AccountsHandler) Sync(c *fiber.Ctx) error {
 	if err := h.stats.SyncAll(c.Context(), uid); err != nil {
 		return mapServiceErr(c, err)
 	}
+
+	// Register user with the ML recommender in the background (non-blocking).
+	if h.rec != nil {
+		go func() {
+			sc, err := h.ai.BuildStudentContext(c.Context(), uid)
+			if err != nil {
+				return
+			}
+			_, _ = h.rec.Recommend(c.Context(), sc, "", 1)
+		}()
+	}
+
 	return ok(c, fiber.Map{"message": "sync completed"})
 }
 

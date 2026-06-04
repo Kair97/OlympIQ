@@ -523,10 +523,10 @@ export default function Roadmap() {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
       if (msg.includes('quota') || msg.includes('rate'))
         store.setGenError('AI quota exceeded — update your API key and restart Docker.')
-      else if (msg.includes('parse') || msg.includes('AI'))
-        store.setGenError('AI response error — check your AI API key in .env')
+      else if (msg.includes('platform') || msg.includes('connect'))
+        store.setGenError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
       else
-        store.setGenError('Failed to generate — connect a platform account first, then try again.')
+        store.setGenError('Failed to generate — check your GEMINI_API_KEY in .env and restart Docker.')
     } finally {
       store.setGenerating(false)
     }

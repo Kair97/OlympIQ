@@ -85,13 +85,15 @@ func main() {
 	accountsSvc := services.NewAccountsService(platformRepo, redisCache, cfSvc, lcSvc)
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
 	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.LeetCodePublicAPIURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
+	taskRecSvc := services.NewTaskRecommenderService(cfg.TaskRecommenderURL)
+	logger.Info("task-recommender configured", zap.String("url", cfg.TaskRecommenderURL))
 
 	healthH := handlers.New(db, &redisPinger{client: rdb}, cfg.GeminiModel)
 	authH := handlers.NewAuthHandler(authSvc, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.IsProduction())
 	profileH := handlers.NewProfileHandler(profileSvc)
-	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc)
+	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc, taskRecSvc)
 	roadmapH := handlers.NewRoadmapHandler(aiSvc, roadmapRepo, goalsRepo)
-	recsH := handlers.NewRecommendationsHandler(aiSvc)
+	recsH := handlers.NewRecommendationsHandler(aiSvc, taskRecSvc)
 	analyzerH := handlers.NewAnalyzerHandler(aiSvc, analysesRepo)
 
 	app := fiber.New(fiber.Config{

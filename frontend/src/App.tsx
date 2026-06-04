@@ -4,7 +4,7 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
-import Roadmap from './pages/Roadmap'
+import Recommender from './pages/Recommender'
 import Analyzer from './pages/Analyzer'
 import Profile from './pages/Profile'
 
@@ -17,7 +17,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/roadmap"   element={<Roadmap />} />
+          <Route path="/recommender" element={<Recommender />} />
           <Route path="/analyzer"  element={<Analyzer />} />
           <Route path="/profile"   element={<Profile />} />
         </Route>
