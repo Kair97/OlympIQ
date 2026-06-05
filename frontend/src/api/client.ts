@@ -10,6 +10,24 @@ const api = axios.create({
 let isRefreshing = false
 let refreshQueue: Array<(ok: boolean) => void> = []
 
+function toUserMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) return 'Something went wrong'
+  const serverMsg: string | undefined = error.response?.data?.error
+  if (serverMsg) return serverMsg
+  switch (error.response?.status) {
+    case 400: return 'Invalid request — please check your input'
+    case 401: return 'Incorrect email or password'
+    case 403: return 'You do not have permission to do that'
+    case 404: return 'Not found'
+    case 409: return 'An account with that email or username already exists'
+    case 429: return 'Too many attempts — please wait a moment and try again'
+    case 500: return 'Server error — please try again later'
+    case 502: return 'AI service unavailable — the analysis service did not respond'
+    case 504: return 'Request timed out — the AI service took too long, try again'
+    default:  return 'Something went wrong'
+  }
+}
+
 api.interceptors.response.use(
   (r) => r,
   async (error) => {
@@ -18,7 +36,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
-          refreshQueue.push((ok) => (ok ? resolve(api(original)) : reject(error)))
+          refreshQueue.push((ok) => (ok ? resolve(api(original)) : reject(new Error(toUserMessage(error)))))
         })
       }
       original._retry = true
@@ -36,7 +54,7 @@ api.interceptors.response.use(
         isRefreshing = false
       }
     }
-    return Promise.reject(error)
+    return Promise.reject(new Error(toUserMessage(error)))
   }
 )
 

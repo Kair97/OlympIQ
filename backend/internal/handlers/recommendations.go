@@ -36,21 +36,28 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 		return mapServiceErr(c, err)
 	}
 
-	// ── Try ML microservice first ─────────────────────────────────────────────
+	// ── 1. Try ML microservice ────────────────────────────────────────────────
 	if h.rec != nil {
 		mlRecs, mlErr := h.rec.Recommend(c.Context(), sc, topic, topK)
 		if mlErr == nil && len(mlRecs) > 0 {
 			return ok(c, mlRecs)
 		}
-		// microservice unavailable or returned nothing — fall through to Gemini
 	}
 
-	// ── Gemini fallback ───────────────────────────────────────────────────────
+	// ── 2. n8n roadmap webhook fallback ──────────────────────────────────────
+	n8nRaw, n8nErr := h.ai.GenerateN8NRecommendations(c.Context(), sc, topic, topK)
+	if n8nErr == nil && n8nRaw != "" {
+		var parsed interface{}
+		if json.Unmarshal([]byte(n8nRaw), &parsed) == nil {
+			return ok(c, parsed)
+		}
+	}
+
+	// ── 3. Gemini last resort ─────────────────────────────────────────────────
 	raw, err := h.ai.GenerateRecommendations(c.Context(), sc, topic, mode)
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
-
 	var parsed interface{}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		return errResponse(c, fiber.StatusInternalServerError, "failed to parse recommendations")

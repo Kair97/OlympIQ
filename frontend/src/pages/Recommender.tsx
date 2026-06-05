@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { getRecommendations } from '../api/recommendations'
 import type { MLRecommendation } from '../api/recommendations'
+import { useRecommenderStore } from '../store/recommenderStore'
 
 const TOPICS = [
   'any', 'dynamic_programming', 'graphs', 'greedy', 'binary_search',
@@ -140,7 +141,18 @@ function ProblemCard({ rec, idx }: { rec: MLRecommendation; idx: number }) {
         </div>
       )}
 
-      {/* Model scores (expanded) */}
+      {/* Reason (n8n / AI fallback) */}
+      {rec.reason && !rec.scores && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5,
+          padding: '7px 10px', background: 'var(--bg-sunken)',
+          borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-soft)',
+        }}>
+          {rec.reason}
+        </div>
+      )}
+
+      {/* Model scores (expanded — ML only) */}
       {open && rec.scores && (
         <div style={{
           borderTop: '1px solid var(--line)',
@@ -160,33 +172,33 @@ function ProblemCard({ rec, idx }: { rec: MLRecommendation; idx: number }) {
 }
 
 export default function Recommender() {
-  const [recs, setRecs]       = useState<MLRecommendation[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [topic, setTopic]     = useState('any')
-  const [platform, setPlatform] = useState('any')
+  const store = useRecommenderStore()
+  const { recs, loading, error, loaded, topic, platform } = store
 
   const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
+    const s = () => useRecommenderStore.getState()
+    s().setLoading(true)
+    s().setError('')
     try {
+      const { topic: t, platform: p } = s()
       const data = await getRecommendations({
-        topic:    topic    !== 'any' ? topic    : undefined,
-        platform: platform !== 'any' ? platform : undefined,
+        topic:    t !== 'any' ? t : undefined,
+        platform: p !== 'any' ? p : undefined,
       })
-      setRecs(Array.isArray(data) ? data : [])
+      s().setRecs(Array.isArray(data) ? data : [])
+      s().setLoaded(true)
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
-      if (msg.includes('platform') || msg.includes('connect'))
-        setError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
+      const msg = e instanceof Error ? e.message : 'Failed to load recommendations.'
+      if (msg.toLowerCase().includes('platform') || msg.toLowerCase().includes('connect'))
+        s().setError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
       else
-        setError('Failed to load recommendations. Make sure your platform is synced in Profile.')
+        s().setError(msg || 'Failed to load recommendations. Make sure your platform is synced in Profile.')
     } finally {
-      setLoading(false)
+      s().setLoading(false)
     }
-  }, [topic, platform])
+  }, [])
 
-  useEffect(() => { void load() }, [load])
+  // No auto-load — user clicks the button to fetch recommendations
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 860, margin: '0 auto' }}>
@@ -211,7 +223,7 @@ export default function Recommender() {
           <label style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Topic</label>
           <select
             value={topic}
-            onChange={e => setTopic(e.target.value)}
+            onChange={e => store.setTopic(e.target.value)}
             style={{
               background: 'var(--bg-elev)', border: '1px solid var(--line)',
               color: 'var(--text)', borderRadius: 8, padding: '6px 10px',
@@ -229,7 +241,7 @@ export default function Recommender() {
           <label style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Platform</label>
           <select
             value={platform}
-            onChange={e => setPlatform(e.target.value)}
+            onChange={e => store.setPlatform(e.target.value)}
             style={{
               background: 'var(--bg-elev)', border: '1px solid var(--line)',
               color: 'var(--text)', borderRadius: 8, padding: '6px 10px',
@@ -256,7 +268,7 @@ export default function Recommender() {
             fontSize: 13, fontWeight: 600, transition: 'opacity 0.15s',
           }}
         >
-          {loading ? 'Loading…' : '↻ Refresh'}
+          {loading ? 'Loading…' : loaded ? '↻ Refresh' : '✦ Load'}
         </button>
       </div>
 
@@ -285,10 +297,43 @@ export default function Recommender() {
         </div>
       )}
 
-      {/* Results */}
-      {!loading && recs.length === 0 && !error && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-faint)', fontSize: 14 }}>
-          No recommendations yet — sync your platform in Profile first.
+      {/* First-visit empty state */}
+      {!loading && !loaded && !error && (
+        <div style={{
+          textAlign: 'center', padding: '60px 24px',
+          background: 'var(--panel)', border: '1px solid var(--line)',
+          borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 14,
+        }}>
+          <div style={{ fontSize: 32, color: 'var(--accent)' }}>✦</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>
+            Get your personalized recommendations
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-dim)', maxWidth: 400 }}>
+            The ML model ranks problems from 18 000+ problems across Codeforces and LeetCode,
+            calibrated to your exact rating and solved history.
+          </div>
+          <button
+            onClick={() => void load()}
+            style={{
+              marginTop: 6, padding: '10px 28px',
+              background: 'var(--accent)', color: 'var(--accent-on)',
+              border: 'none', borderRadius: 'var(--radius-sm)',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            ✦ Load Recommendations
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+            requires Codeforces or LeetCode connected in Profile
+          </div>
+        </div>
+      )}
+
+      {/* Loaded but empty */}
+      {!loading && loaded && recs.length === 0 && !error && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-faint)', fontSize: 13 }}>
+          No problems matched your filters — try a different topic or platform.
         </div>
       )}
 

@@ -10,6 +10,11 @@ function cx(...xs: (string | false | null | undefined)[]) {
   return xs.filter(Boolean).join(' ')
 }
 
+function isValidHistoryItem(h: { problem_title?: string | null }): boolean {
+  const t = h.problem_title ?? ''
+  return t.trim() !== '' && t !== 'Unknown Problem' && t !== 'Unknown'
+}
+
 function detectPlatform(url: string): 'codeforces' | 'leetcode' | 'other' {
   if (url.includes('codeforces.com')) return 'codeforces'
   if (url.includes('leetcode.com'))   return 'leetcode'
@@ -517,13 +522,7 @@ function HistorySidebar() {
 
   if (!historyOpen) return null
 
-  // Skip entries with no meaningful title (failed or incomplete analyses)
-  const valid = history.filter(h =>
-    h.problem_title &&
-    h.problem_title.trim() !== '' &&
-    h.problem_title !== 'Unknown Problem' &&
-    h.problem_title !== 'Unknown'
-  )
+  const valid = history.filter(isValidHistoryItem)
 
   const filtered = valid.filter(h =>
     !historySearch ||
@@ -665,40 +664,35 @@ export default function Analyzer() {
 
   const handleAnalyze = useCallback(async (e?: FormEvent) => {
     e?.preventDefault()
-    const target = store.currentURL.trim()
-    if (!target || store.analyzing) return
+    // Use getState() so this async closure always hits the live store,
+    // not the render-time snapshot — survives component unmount/remount.
+    const s = () => useAnalyzerStore.getState()
+    const target = s().currentURL.trim()
+    if (!target || s().analyzing) return
 
     const platform = detectPlatform(target)
     if (platform === 'other' && !target.startsWith('http')) {
-      store.setError('Please paste a full URL starting with https://')
+      s().setError('Please paste a full URL starting with https://')
       return
     }
 
-    store.setAnalyzing(true)
-    store.setError('')
+    s().setAnalyzing(true)
+    s().setError('')
     try {
       const result = await analyzeProblem(target)
       if (result.analysis) {
-        const updated = await listAnalyses()
-        const items = updated.items ?? []
-        store.setHistory(items)
-        store.setCurrentContent(result.analysis, target, items[0]?.id ?? null)
+        s().setCurrentContent(result.analysis, target, result.id ?? null)
+        listAnalyses()
+          .then(r => s().setHistory(r.items ?? []))
+          .catch(() => {})
       }
     } catch (e: unknown) {
-      const msg = (e as any)?.response?.data?.error ?? ''
-      if (msg.includes('quota') || msg.includes('rate limit')) {
-        store.setError('AI quota exceeded — update your API key in .env and restart Docker.')
-      } else if (msg.includes('parse') || msg.includes('Gemini') || msg.includes('AI response')) {
-        store.setError('AI response error — your API key may be invalid or the model is unavailable.')
-      } else if (msg.includes('url') || msg.includes('URL')) {
-        store.setError('Invalid URL — paste a full Codeforces or LeetCode problem link.')
-      } else {
-        store.setError(msg || 'Analysis failed — check your URL and API key, then try again.')
-      }
+      const msg = e instanceof Error ? e.message : 'Analysis failed — try again.'
+      s().setError(msg)
     } finally {
-      store.setAnalyzing(false)
+      s().setAnalyzing(false)
     }
-  }, [store])
+  }, [])
 
   const handleSampleAnalyze = useCallback(() => {
     const sample = SAMPLE_PROBLEMS[sampleIdx]
@@ -837,7 +831,10 @@ export default function Analyzer() {
       {/* History tab (when sidebar closed) */}
       {!store.historyOpen && (
         <button className="oq-history-tab" onClick={() => store.setHistoryOpen(true)}>
-          history{store.history.length > 0 ? ` (${store.history.length})` : ''} ›
+          {(() => {
+            const n = store.history.filter(isValidHistoryItem).length
+            return `history${n > 0 ? ` (${n})` : ''} ›`
+          })()}
         </button>
       )}
     </div>

@@ -208,6 +208,12 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, curr
 	return s.users.Update(ctx, u)
 }
 
+// IssueTokens creates a fresh token pair for an already-authenticated user.
+// Used by the Register handler to auto-login after account creation.
+func (s *AuthService) IssueTokens(ctx context.Context, u *models.User) (*TokenPair, error) {
+	return s.issueTokenPair(ctx, u)
+}
+
 func (s *AuthService) issueTokenPair(ctx context.Context, u *models.User) (*TokenPair, error) {
 	now := time.Now().UTC()
 	accessExp := now.Add(s.accessTTL)

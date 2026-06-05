@@ -22,6 +22,8 @@ func NewAuthHandler(auth *services.AuthService, accessTTL, refreshTTL time.Durat
 }
 
 // Register handles POST /auth/register.
+// Creates the account and immediately issues JWT cookies so the user is
+// logged in without a separate login step.
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var in services.RegisterInput
 	if err := parseAndValidate(c, &in); err != nil {
@@ -31,6 +33,11 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	if err != nil {
 		return mapServiceErr(c, err)
 	}
+	pair, err := h.auth.IssueTokens(c.Context(), user)
+	if err != nil {
+		return mapServiceErr(c, err)
+	}
+	h.setTokenCookies(c, pair)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"success": true,
 		"data":    fiber.Map{"id": user.ID, "email": user.Email, "username": user.Username},

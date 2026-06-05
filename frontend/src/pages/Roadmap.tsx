@@ -514,21 +514,24 @@ export default function Roadmap() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function generate() {
-    store.setGenerating(true)
-    store.setGenError('')
+    // Use getState() so updates reach the live store even if the
+    // component unmounts mid-request (user navigated away and back).
+    const s = () => useRoadmapStore.getState()
+    s().setGenerating(true)
+    s().setGenError('')
     try {
       const rm = await generateRoadmap()
-      store.setRoadmap(rm as unknown as UnifiedRoadmap, 'weekly')
+      s().setRoadmap(rm as unknown as UnifiedRoadmap, 'weekly')
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
       if (msg.includes('quota') || msg.includes('rate'))
-        store.setGenError('AI quota exceeded — update your API key and restart Docker.')
+        s().setGenError('AI quota exceeded — update your API key and restart Docker.')
       else if (msg.includes('platform') || msg.includes('connect'))
-        store.setGenError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
+        s().setGenError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
       else
-        store.setGenError('Failed to generate — check your GEMINI_API_KEY in .env and restart Docker.')
+        s().setGenError('Failed to generate — check your GEMINI_API_KEY in .env and restart Docker.')
     } finally {
-      store.setGenerating(false)
+      s().setGenerating(false)
     }
   }
 

@@ -18,7 +18,8 @@ export interface MLRecommendation {
   cf_rating: number | null
   lc_difficulty: string | null
   tags: string[]
-  scores: MLScores
+  reason?: string
+  scores?: MLScores
 }
 
 export interface RecommendParams {

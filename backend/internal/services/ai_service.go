@@ -422,6 +422,110 @@ func (s *AIService) GenerateRecommendations(ctx context.Context, sc *StudentCont
 	return s.callGemini(ctx, recommendationsSystemPrompt, userMsg)
 }
 
+// n8nRecProblem is the normalized format returned by the n8n recommendations fallback.
+type n8nRecProblem struct {
+	Rank         int      `json:"rank"`
+	Platform     string   `json:"platform"`
+	PlatformID   string   `json:"platform_id"`
+	Title        string   `json:"title"`
+	URL          string   `json:"url"`
+	Difficulty   float64  `json:"difficulty"`
+	CFRating     *int     `json:"cf_rating"`
+	LCDifficulty *string  `json:"lc_difficulty"`
+	Tags         []string `json:"tags"`
+	Reason       string   `json:"reason"`
+}
+
+// GenerateN8NRecommendations calls the n8n roadmap webhook in topic mode and
+// extracts the problems from each topic as a flat recommendations list.
+// This is the fallback when the ML task-recommender is unavailable.
+func (s *AIService) GenerateN8NRecommendations(ctx context.Context, sc *StudentContext, topic string, topK int) (string, error) {
+	if s.n8nRoadmapURL == "" {
+		return "", fmt.Errorf("n8n roadmap URL not configured")
+	}
+
+	raw, err := s.callN8NRoadmap(ctx, sc, "topic")
+	if err != nil {
+		return "", fmt.Errorf("n8n recommendations fallback failed: %w", err)
+	}
+
+	// Parse the unified roadmap — extract topic_mode.topics[].problems
+	var unified struct {
+		TopicMode *struct {
+			Topics []struct {
+				Name     string `json:"name"`
+				Problems []struct {
+					Title      string   `json:"title"`
+					Platform   string   `json:"platform"`
+					URL        string   `json:"url"`
+					Rating     *int     `json:"rating"`
+					Difficulty *string  `json:"difficulty"`
+					Tags       []string `json:"tags"`
+					Reason     string   `json:"reason"`
+				} `json:"problems"`
+			} `json:"topics"`
+		} `json:"topic_mode"`
+	}
+	if err := json.Unmarshal([]byte(raw), &unified); err != nil || unified.TopicMode == nil {
+		return "", fmt.Errorf("n8n response missing topic_mode")
+	}
+
+	lcDiffToFloat := map[string]float64{
+		"easy": 0.25, "Easy": 0.25,
+		"medium": 0.55, "Medium": 0.55,
+		"hard": 0.85, "Hard": 0.85,
+	}
+
+	var problems []n8nRecProblem
+	rank := 1
+	topicLower := strings.ToLower(strings.TrimSpace(topic))
+
+	for _, t := range unified.TopicMode.Topics {
+		if topicLower != "" && !strings.Contains(strings.ToLower(t.Name), topicLower) {
+			continue
+		}
+		for _, p := range t.Problems {
+			if rank > topK {
+				break
+			}
+			prob := n8nRecProblem{
+				Rank:       rank,
+				Platform:   p.Platform,
+				PlatformID: "",
+				Title:      p.Title,
+				URL:        p.URL,
+				Tags:       p.Tags,
+				Reason:     p.Reason,
+				Difficulty: 0.5,
+			}
+			if p.Platform == "codeforces" {
+				prob.CFRating = p.Rating
+				if p.Rating != nil {
+					prob.Difficulty = float64(*p.Rating-800) / 2700.0
+				}
+			} else {
+				if p.Difficulty != nil {
+					prob.LCDifficulty = p.Difficulty
+					if f, ok := lcDiffToFloat[*p.Difficulty]; ok {
+						prob.Difficulty = f
+					}
+				}
+			}
+			problems = append(problems, prob)
+			rank++
+		}
+		if rank > topK {
+			break
+		}
+	}
+
+	out, err := json.Marshal(problems)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
 // callGemini sends a request to the Gemini generateContent REST endpoint.
 func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string) (string, error) {
 	reqBody := map[string]interface{}{

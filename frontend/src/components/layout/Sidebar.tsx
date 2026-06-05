@@ -15,9 +15,11 @@ const navItems = [
 interface Props {
   theme: string
   onThemeChange: (t: string) => void
+  isOpen: boolean
+  onClose: () => void
 }
 
-export default function Sidebar({ theme, onThemeChange }: Props) {
+export default function Sidebar({ theme, onThemeChange, isOpen, onClose }: Props) {
   const { user, setUser } = useAuthStore()
   const navigate = useNavigate()
 
@@ -40,7 +42,10 @@ export default function Sidebar({ theme, onThemeChange }: Props) {
   const lcAcc = accounts.find(a => a.platform === 'leetcode')
 
   return (
-    <nav className="oq-sidenav">
+    <nav className={`oq-sidenav${isOpen ? ' is-open' : ''}`}>
+      {/* Mobile close button */}
+      <button className="oq-sidenav-close" onClick={onClose} aria-label="Close navigation">×</button>
+
       {/* Brand */}
       <div className="oq-brand">
         <span className="oq-brand-mark">◇</span>
@@ -55,6 +60,7 @@ export default function Sidebar({ theme, onThemeChange }: Props) {
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) => `oq-nav-item${isActive ? ' is-active' : ''}`}
           >
             <span className="oq-nav-glyph">{glyph}</span>
