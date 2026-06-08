@@ -354,17 +354,16 @@ func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 	var raw struct {
 		Profile *models.LeetCodeProfile `json:"profile"`
 		Contest *models.LeetCodeContest `json:"contest"`
-		Skill   *struct {
-			Data struct {
-				Advanced     []LCSkill `json:"advanced"`
-				Intermediate []LCSkill `json:"intermediate"`
-				Fundamental  []LCSkill `json:"fundamental"`
-			} `json:"data"`
+		// alfa-leetcode-api returns arrays at root level — no "data" wrapper.
+		Skill *struct {
+			Advanced     []LCSkill `json:"advanced"`
+			Intermediate []LCSkill `json:"intermediate"`
+			Fundamental  []LCSkill `json:"fundamental"`
 		} `json:"skill"`
-		Calendar       map[string]int                 `json:"calendar"`
-		LanguageStats  []models.LeetCodeLanguageStat  `json:"language_stats"`
-		ContestHistory []models.LeetCodeContestEntry  `json:"contest_history"`
-		RecentAC       []models.LCRecentProblem        `json:"recent_ac"`
+		Calendar       map[string]int                `json:"calendar"`
+		LanguageStats  []models.LeetCodeLanguageStat `json:"language_stats"`
+		ContestHistory []models.LeetCodeContestEntry `json:"contest_history"`
+		RecentAC       []models.LCRecentProblem      `json:"recent_ac"`
 	}
 	if err := json.Unmarshal(stat.RawData, &raw); err != nil {
 		return d
@@ -383,8 +382,8 @@ func parseLCDashboard(handle string, stat *models.UserStats) *LCDashboard {
 		d.TopPercentage = raw.Contest.ContestTopPercentage
 	}
 	if raw.Skill != nil {
-		all := append(raw.Skill.Data.Fundamental, raw.Skill.Data.Intermediate...)
-		all = append(all, raw.Skill.Data.Advanced...)
+		all := append(raw.Skill.Fundamental, raw.Skill.Intermediate...)
+		all = append(all, raw.Skill.Advanced...)
 		d.Skills = all
 	}
 	d.Calendar = raw.Calendar

@@ -704,8 +704,8 @@ export default function Dashboard() {
                 </ul>
               ) : (
                 <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>
-                  <div style={{ marginBottom: 8, fontFamily: 'var(--font-mono)' }}>generate a roadmap to get recommendations</div>
-                  <button className="oq-btn-ghost" onClick={() => navigate('/roadmap')} style={{ fontSize: 11 }}>Go to Roadmap →</button>
+                  <div style={{ marginBottom: 8, fontFamily: 'var(--font-mono)' }}>get AI problem recommendations tailored to your stats</div>
+                  <button className="oq-btn-ghost" onClick={() => navigate('/recommender')} style={{ fontSize: 11 }}>Go to Recommender →</button>
                 </div>
               )}
             </div>

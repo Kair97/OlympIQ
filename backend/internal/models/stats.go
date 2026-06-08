@@ -102,12 +102,11 @@ type LeetCodeLanguageStat struct {
 }
 
 // LeetCodeSkill holds the full skill breakdown from /{username}/skill.
+// The alfa-leetcode-api returns arrays at the root level (no "data" wrapper).
 type LeetCodeSkill struct {
-	Data struct {
-		Advanced     []LeetCodeSkillTag `json:"advanced"`
-		Intermediate []LeetCodeSkillTag `json:"intermediate"`
-		Fundamental  []LeetCodeSkillTag `json:"fundamental"`
-	} `json:"data"`
+	Advanced     []LeetCodeSkillTag `json:"advanced"`
+	Intermediate []LeetCodeSkillTag `json:"intermediate"`
+	Fundamental  []LeetCodeSkillTag `json:"fundamental"`
 }
 
 // LeetCodeContestEntry is one contest from /{username}/contest/history.

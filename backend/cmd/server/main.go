@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -84,7 +85,7 @@ func main() {
 	profileSvc := services.NewProfileService(userRepo, tokenRepo)
 	accountsSvc := services.NewAccountsService(platformRepo, redisCache, cfSvc, lcSvc)
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
-	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.LeetCodePublicAPIURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
+	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.N8NRecommenderURL, cfg.LeetCodePublicAPIURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
 	taskRecSvc := services.NewTaskRecommenderService(cfg.TaskRecommenderURL)
 	logger.Info("task-recommender configured", zap.String("url", cfg.TaskRecommenderURL))
 
@@ -97,6 +98,9 @@ func main() {
 	analyzerH := handlers.NewAnalyzerHandler(aiSvc, analysesRepo)
 
 	app := fiber.New(fiber.Config{
+		ReadTimeout:  180 * time.Second,
+		WriteTimeout: 180 * time.Second,
+		IdleTimeout:  180 * time.Second,
 		ErrorHandler: func(c *fiber.Ctx, e error) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false, "data": nil, "error": "internal server error",
@@ -159,7 +163,7 @@ func main() {
 	protected.Post("/roadmap/generate", roadmapH.Generate)
 	protected.Get("/roadmap", roadmapH.GetLatest)
 
-	protected.Get("/recommendations", recsH.List)
+	protected.Post("/recommendations", recsH.List)
 
 	protected.Post("/analyze", analyzerH.Analyze)
 	protected.Get("/analyses", analyzerH.ListAnalyses)

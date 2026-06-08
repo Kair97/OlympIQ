@@ -47,23 +47,24 @@ type StudentContext struct {
 // AIService handles AI calls for roadmap, razbor, and recommendations.
 // Uses n8n webhooks when configured; falls back to Gemini otherwise.
 type AIService struct {
-	apiKey            string
-	model             string
-	n8nAnalyzerURL    string
-	n8nRoadmapURL     string
-	lcPublicAPIURL    string // public alfa-leetcode-api URL used in n8n payloads
-	http              *http.Client
-	platforms         repository.PlatformRepository
-	stats             repository.StatsRepository
-	goals             repository.GoalsRepository
-	cache             CacheStore
-	cf                *CodeforcesService
-	lc                *LeetCodeService
+	apiKey               string
+	model                string
+	n8nAnalyzerURL       string
+	n8nRoadmapURL        string
+	n8nRecommenderURL    string
+	lcPublicAPIURL       string // public alfa-leetcode-api URL used in n8n payloads
+	http                 *http.Client
+	platforms            repository.PlatformRepository
+	stats                repository.StatsRepository
+	goals                repository.GoalsRepository
+	cache                CacheStore
+	cf                   *CodeforcesService
+	lc                   *LeetCodeService
 }
 
 // NewAIService constructs an AIService.
 func NewAIService(
-	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL, lcPublicAPIURL string,
+	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL, n8nRecommenderURL, lcPublicAPIURL string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -72,18 +73,19 @@ func NewAIService(
 	lc *LeetCodeService,
 ) *AIService {
 	return &AIService{
-		apiKey:         apiKey,
-		model:          model,
-		n8nAnalyzerURL: n8nAnalyzerURL,
-		n8nRoadmapURL:  n8nRoadmapURL,
-		lcPublicAPIURL: lcPublicAPIURL,
-		http:           &http.Client{Timeout: 90 * time.Second},
-		platforms:      platforms,
-		stats:          stats,
-		goals:          goals,
-		cache:          cache,
-		cf:             cf,
-		lc:             lc,
+		apiKey:            apiKey,
+		model:             model,
+		n8nAnalyzerURL:    n8nAnalyzerURL,
+		n8nRoadmapURL:     n8nRoadmapURL,
+		n8nRecommenderURL: n8nRecommenderURL,
+		lcPublicAPIURL:    lcPublicAPIURL,
+		http:              &http.Client{Timeout: 150 * time.Second},
+		platforms:         platforms,
+		stats:             stats,
+		goals:             goals,
+		cache:             cache,
+		cf:                cf,
+		lc:                lc,
 	}
 }
 
@@ -184,8 +186,8 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 			// Fetch full topic skill breakdown
 			skill, _ := s.lc.GetSkill(ctx, acc.Handle)
 			if skill != nil {
-				allTags := append(skill.Data.Fundamental, skill.Data.Intermediate...)
-				allTags = append(allTags, skill.Data.Advanced...)
+				allTags := append(skill.Fundamental, skill.Intermediate...)
+				allTags = append(allTags, skill.Advanced...)
 				sc.LCTopics = make(map[string]int, len(allTags))
 				for _, t := range allTags {
 					sc.LCTopics[t.TagName] = t.ProblemsSolved
@@ -352,14 +354,11 @@ func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (stri
 }
 
 // callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
-// LeetCode problem URLs are transformed to the public alfa-leetcode-api /select endpoint
-// so n8n (a cloud service) can fetch problem data without hitting leetcode.com directly.
+// The original URL is sent as-is — the n8n AI knows problems from training data and does not
+// need to fetch the URL. Transforming to alfa-leetcode-api breaks the n8n workflow.
 func (s *AIService) callN8NAnalyzer(ctx context.Context, problemURL string) (string, error) {
-	// Transform LC URLs: leetcode.com/problems/{slug}/ → alfa-leetcode-api.onrender.com/select?titleSlug={slug}
-	n8nURL := s.lcProblemURLToAPIURL(sanitize(problemURL))
-
 	body, err := json.Marshal(map[string]string{
-		"problem_url": n8nURL,
+		"problem_url": sanitize(problemURL),
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: failed to build n8n request: %v", ErrExternal, err)
@@ -524,6 +523,150 @@ func (s *AIService) GenerateN8NRecommendations(ctx context.Context, sc *StudentC
 		return "", err
 	}
 	return string(out), nil
+}
+
+// GenerateStructuredRecommendations calls the dedicated n8n recommender webhook and returns
+// the raw structured JSON: { meta, leetcode: {topic: [problems]}, codeforces: {topic: [problems]} }.
+// Results are cached in Redis for 6 hours to avoid redundant n8n cold-start latency.
+func (s *AIService) GenerateStructuredRecommendations(ctx context.Context, sc *StudentContext) (string, error) {
+	if s.n8nRecommenderURL == "" {
+		return "", fmt.Errorf("n8n recommender URL not configured")
+	}
+
+	username := sc.CFHandle
+	if username == "" {
+		username = sc.LCHandle
+	}
+
+	// Serve from cache if fresh (6h TTL)
+	if username != "" {
+		cacheKey := "recommendations:" + username
+		if cached, err := s.cache.Get(ctx, cacheKey); err == nil && cached != "" {
+			return cached, nil
+		}
+	}
+
+	result, err := s.callN8NRecommender(ctx, sc)
+	if err != nil {
+		return "", err
+	}
+
+	// Cache for 6 hours so re-opening the page costs zero n8n calls
+	if username != "" && result != "" {
+		_ = s.cache.Set(ctx, "recommendations:"+username, result, 6*time.Hour)
+	}
+
+	return result, nil
+}
+
+// callN8NRecommender sends the student context to the dedicated n8n recommender webhook.
+// Uses the same payload format as callN8NRoadmap.
+func (s *AIService) callN8NRecommender(ctx context.Context, sc *StudentContext) (string, error) {
+	username := sc.CFHandle
+	if username == "" {
+		username = sc.LCHandle
+	}
+
+	weeklyHours := 15
+	if sc.Goals != nil && sc.Goals.WeeklyHours != nil {
+		weeklyHours = *sc.Goals.WeeklyHours
+	}
+
+	payload := map[string]interface{}{
+		"username":     username,
+		"weekly_hours": weeklyHours,
+	}
+
+	if sc.CFHandle != "" {
+		cfTopics := sc.CFTagFreq
+		if cfTopics == nil {
+			cfTopics = make(map[string]int)
+		}
+		ratingHistory := make([]int, 0, len(sc.CFRecentRating))
+		for _, r := range sc.CFRecentRating {
+			ratingHistory = append(ratingHistory, r.NewRating)
+		}
+		payload["codeforces"] = map[string]interface{}{
+			"rating":          sc.CFRating,
+			"rank":            orNA(sc.CFRank),
+			"problems_solved": len(sc.CFSolvedKeys),
+			"topics":          cfTopics,
+			"rating_history":  ratingHistory,
+		}
+	}
+
+	if sc.LCHandle != "" {
+		lcTopics := sc.LCTopics
+		if lcTopics == nil {
+			lcTopics = make(map[string]int)
+		}
+		payload["leetcode"] = map[string]interface{}{
+			"total_solved": sc.LCTotalSolved,
+			"easy":         sc.LCEasy,
+			"medium":       sc.LCMedium,
+			"hard":         sc.LCHard,
+			"topics":       lcTopics,
+		}
+	}
+
+	if sc.Goals != nil {
+		payload["goal"] = sc.Goals.GoalType
+		if sc.Goals.TargetDate != nil {
+			payload["deadline"] = sc.Goals.TargetDate.Format("2006-01-02")
+		}
+		if sc.Goals.TargetRating != nil {
+			payload["target_rating"] = *sc.Goals.TargetRating
+		}
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build recommender request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nRecommenderURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: recommender request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read recommender response: %v", ErrExternal, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: recommender returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	// Unwrap n8n envelope: [{"output":"...json..."}]
+	cleaned := stripMarkdownFences(strings.TrimSpace(string(respBody)))
+	if strings.HasPrefix(cleaned, "[") {
+		var envelope []map[string]json.RawMessage
+		if json.Unmarshal([]byte(cleaned), &envelope) == nil && len(envelope) > 0 {
+			for _, key := range []string{"output", "json", "text", "result"} {
+				if raw, ok := envelope[0][key]; ok {
+					inner := strings.TrimSpace(string(raw))
+					if strings.HasPrefix(inner, `"`) {
+						var s string
+						if json.Unmarshal(raw, &s) == nil {
+							cleaned = stripMarkdownFences(s)
+							break
+						}
+					} else {
+						cleaned = inner
+						break
+					}
+				}
+			}
+		}
+	}
+	return cleaned, nil
 }
 
 // callGemini sends a request to the Gemini generateContent REST endpoint.

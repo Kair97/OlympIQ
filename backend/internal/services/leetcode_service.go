@@ -145,31 +145,49 @@ func (s *LeetCodeService) GetContestHistory(ctx context.Context, handle string) 
 	return wrapper.ContestHistory, nil
 }
 
-// GetCalendar fetches /{handle}/calendar with caching and returns the raw JSON.
+// GetCalendar fetches /{handle}/calendar with caching and returns the submission map.
+// Handles both object form {"submissionCalendar":{...}} and JSON-string form
+// {"submissionCalendar":"{\"ts\":n,...}"} because alfa-leetcode-api v2 sometimes
+// returns the inner map as a pre-encoded JSON string.
 func (s *LeetCodeService) GetCalendar(ctx context.Context, handle string) (map[string]int, error) {
 	key := fmt.Sprintf("lc:calendar:%s", handle)
 	if cached, err := s.cache.Get(ctx, key); err == nil {
-		var wrapper struct {
-			SubmissionCalendar map[string]int `json:"submissionCalendar"`
-		}
-		if json.Unmarshal([]byte(cached), &wrapper) == nil {
-			return wrapper.SubmissionCalendar, nil
+		if m := parseCalendarBody([]byte(cached)); len(m) > 0 {
+			return m, nil
 		}
 	}
-
 	url := fmt.Sprintf("%s/%s/calendar", s.baseURL, handle)
 	body, err := s.doGet(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-	var wrapper struct {
-		SubmissionCalendar map[string]int `json:"submissionCalendar"`
-	}
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return nil, err
-	}
+	m := parseCalendarBody(body)
 	_ = s.cache.Set(ctx, key, string(body), time.Hour)
-	return wrapper.SubmissionCalendar, nil
+	return m, nil
+}
+
+// parseCalendarBody extracts the submission calendar map from the raw API body.
+func parseCalendarBody(data []byte) map[string]int {
+	var wrapper struct {
+		SubmissionCalendar json.RawMessage `json:"submissionCalendar"`
+	}
+	if json.Unmarshal(data, &wrapper) != nil || len(wrapper.SubmissionCalendar) == 0 {
+		return nil
+	}
+	// Try direct object: {"1700000000": 3}
+	var m map[string]int
+	if json.Unmarshal(wrapper.SubmissionCalendar, &m) == nil && len(m) > 0 {
+		return m
+	}
+	// Try JSON-encoded string: "\"1700000000\":3,..."
+	var s string
+	if json.Unmarshal(wrapper.SubmissionCalendar, &s) == nil {
+		var m2 map[string]int
+		if json.Unmarshal([]byte(s), &m2) == nil {
+			return m2
+		}
+	}
+	return nil
 }
 
 func (s *LeetCodeService) getJSON(ctx context.Context, cacheKey, url string, dest interface{}) error {

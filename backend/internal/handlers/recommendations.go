@@ -20,7 +20,7 @@ func NewRecommendationsHandler(ai *services.AIService, rec *services.TaskRecomme
 }
 
 // List handles GET /recommendations.
-// Uses the ML TaskRecommender microservice when available; falls back to Gemini.
+// Priority: n8n structured recommender → ML microservice → n8n roadmap → Gemini.
 func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 	uid, err := userUUID(c)
 	if err != nil {
@@ -36,7 +36,16 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 		return mapServiceErr(c, err)
 	}
 
-	// ── 1. Try ML microservice ────────────────────────────────────────────────
+	// ── 1. n8n structured recommender (new format) ───────────────────────────
+	structuredRaw, structErr := h.ai.GenerateStructuredRecommendations(c.Context(), sc)
+	if structErr == nil && structuredRaw != "" {
+		var parsed interface{}
+		if json.Unmarshal([]byte(structuredRaw), &parsed) == nil {
+			return ok(c, parsed)
+		}
+	}
+
+	// ── 2. ML microservice ───────────────────────────────────────────────────
 	if h.rec != nil {
 		mlRecs, mlErr := h.rec.Recommend(c.Context(), sc, topic, topK)
 		if mlErr == nil && len(mlRecs) > 0 {
@@ -44,7 +53,7 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 		}
 	}
 
-	// ── 2. n8n roadmap webhook fallback ──────────────────────────────────────
+	// ── 3. n8n roadmap webhook fallback ──────────────────────────────────────
 	n8nRaw, n8nErr := h.ai.GenerateN8NRecommendations(c.Context(), sc, topic, topK)
 	if n8nErr == nil && n8nRaw != "" {
 		var parsed interface{}
@@ -53,7 +62,7 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 		}
 	}
 
-	// ── 3. Gemini last resort ─────────────────────────────────────────────────
+	// ── 4. Gemini last resort ─────────────────────────────────────────────────
 	raw, err := h.ai.GenerateRecommendations(c.Context(), sc, topic, mode)
 	if err != nil {
 		return mapServiceErr(c, err)
