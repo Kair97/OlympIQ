@@ -21,23 +21,23 @@ type RedisPinger interface {
 type Handler struct {
 	db         DBPinger
 	redis      RedisPinger
-	geminiModel string
+	aiProvider string
 }
 
 // New constructs a Handler with the given database and Redis connections.
-func New(db DBPinger, redis RedisPinger, geminiModel ...string) *Handler {
-	model := "gemini-2.0-flash"
-	if len(geminiModel) > 0 && geminiModel[0] != "" {
-		model = geminiModel[0]
+func New(db DBPinger, redis RedisPinger, aiProvider ...string) *Handler {
+	provider := "n8n"
+	if len(aiProvider) > 0 && aiProvider[0] != "" {
+		provider = aiProvider[0]
 	}
-	return &Handler{db: db, redis: redis, geminiModel: model}
+	return &Handler{db: db, redis: redis, aiProvider: provider}
 }
 
 // Config returns public runtime configuration the frontend needs.
 func (h *Handler) Config(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success": true,
-		"data":    fiber.Map{"ai_model": h.geminiModel, "version": "1.0.0"},
+		"data":    fiber.Map{"ai_provider": h.aiProvider, "version": "1.0.0"},
 		"error":   nil,
 	})
 }

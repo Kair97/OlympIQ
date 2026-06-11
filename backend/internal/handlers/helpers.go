@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -10,7 +11,16 @@ import (
 	"olympiq/backend/internal/services"
 )
 
-var validate = validator.New()
+var (
+	validate        = validator.New()
+	usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+)
+
+func init() {
+	_ = validate.RegisterValidation("username", func(fl validator.FieldLevel) bool {
+		return usernamePattern.MatchString(fl.Field().String())
+	})
+}
 
 func ok(c *fiber.Ctx, data interface{}) error {
 	return c.JSON(fiber.Map{"success": true, "data": data, "error": nil})
@@ -38,7 +48,11 @@ func mapServiceErr(c *fiber.Ctx, err error) error {
 	case errors.Is(err, services.ErrBadRequest):
 		return errResponse(c, fiber.StatusBadRequest, stripSentinel(err, services.ErrBadRequest))
 	case errors.Is(err, services.ErrExternal):
-		return errResponse(c, fiber.StatusBadGateway, "AI service error — please try again")
+		msg := stripSentinel(err, services.ErrExternal)
+		if msg == "" {
+			msg = "external platform unavailable - other platforms may still have synced"
+		}
+		return errResponse(c, fiber.StatusBadGateway, msg)
 	default:
 		return errResponse(c, fiber.StatusInternalServerError, "internal server error")
 	}
@@ -47,5 +61,5 @@ func mapServiceErr(c *fiber.Ctx, err error) error {
 // stripSentinel removes the "<sentinel>: " prefix that fmt.Errorf("%w: msg", sentinel) produces,
 // leaving only the human-readable message part.
 func stripSentinel(err, sentinel error) string {
-	return strings.TrimPrefix(err.Error(), sentinel.Error()+": ")
+	return strings.Replace(err.Error(), sentinel.Error()+": ", "", 1)
 }

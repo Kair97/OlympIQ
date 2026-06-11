@@ -318,7 +318,10 @@ function WeakTopicsBanner({
       border: '1px solid oklch(0.72 0.16 305 / 0.25)',
       marginBottom: 12, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5,
     }}>
-      <span style={{ flexShrink: 0, marginTop: 1 }}>💡</span>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true">
+        <path d="M9 18h6M10 21h4" />
+        <path d="M12 3a6 6 0 0 1 4 10.5c-.7.6-1 1.5-1 2.5h-6c0-1-.3-1.9-1-2.5A6 6 0 0 1 12 3z" />
+      </svg>
       <span style={{ flex: 1 }}>
         {weakDisplay && (
           <>
@@ -364,29 +367,26 @@ export default function Recommender() {
   // Reset banner when new recommendations are loaded
   const resetBanner = () => setBannerDismissed(false)
 
-  // Derive available topic keys and filtered problems from structured data
+  // Topic list comes from the server's available_topics (full list even when
+  // the problem buckets are filtered to one topic). Problems are filtered by
+  // topic server-side; only the platform filter is applied client-side.
   const topics = structured ? availableTopics(structured) : ['any']
-  const filteredProbs = structured ? filterStructured(structured, topic, platform) : []
+  const filteredProbs = structured ? filterStructured(structured, platform) : []
 
-  const load = useCallback(async () => {
+  // Loads recommendations for the given topic ("any" = the agent's best-fit
+  // picks). The backend caches the full n8n response, so switching topics is
+  // a cheap server-side filter, not a new AI call.
+  const load = useCallback(async (selectedTopic?: string) => {
     const s = () => useRecommenderStore.getState()
+    const wantedTopic = selectedTopic ?? s().topic
     s().setLoading(true)
     s().setError('')
     resetBanner()
     try {
-      const data = await postRecommendations()
+      const data = await postRecommendations(wantedTopic)
       if (isStructuredRecs(data)) {
         s().setStructured(data)
         s().setRecs([])
-        // Auto-select next_best_topic on first load
-        const best = data.meta.next_best_topic
-        if (best) {
-          const keys = availableTopics(data)
-          const bestSlug = best.toLowerCase().replace(/\s+/g, '_')
-          const match = keys.find(k => k.toLowerCase() === bestSlug)
-            || keys.find(k => k.toLowerCase() === best.toLowerCase())
-          if (match) s().setTopic(match)
-        }
       } else {
         s().setRecs(Array.isArray(data) ? data : [])
         s().setStructured(null)
@@ -436,7 +436,11 @@ export default function Recommender() {
           <label style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Topic</label>
           <select
             value={topic}
-            onChange={e => store.setTopic(e.target.value)}
+            onChange={e => {
+              store.setTopic(e.target.value)
+              // Topic filtering happens server-side — re-fetch (served from cache)
+              if (loaded) void load(e.target.value)
+            }}
             style={{
               background: 'var(--bg-elev)', border: '1px solid var(--line)',
               color: 'var(--text)', borderRadius: 8, padding: '6px 10px',
@@ -471,7 +475,7 @@ export default function Recommender() {
 
         {structured && (
           <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', alignSelf: 'center', marginLeft: 4 }}>
-            {filteredProbs.length} problem{filteredProbs.length !== 1 ? 's' : ''} — filters apply instantly
+            {filteredProbs.length} problem{filteredProbs.length !== 1 ? 's' : ''} — topic filtered by the server
           </div>
         )}
 

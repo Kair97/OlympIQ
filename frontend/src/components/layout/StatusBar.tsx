@@ -52,9 +52,6 @@ export default function StatusBar() {
 
       <span className="oq-spacer" />
 
-      <span className="oq-mono oq-dim">cmd-k</span>
-      <span className="oq-dim">search</span>
-      <span className="oq-dim">·</span>
       <span className="oq-mono">OlympIQ</span>
       <span className="oq-dim">·</span>
       <span className="oq-mono">{t}</span>

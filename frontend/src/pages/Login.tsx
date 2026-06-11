@@ -52,7 +52,7 @@ export default function Login() {
         </div>
 
         {/* Error */}
-        {error && <div className="oq-flash-err">{error}</div>}
+        {error && <div className="oq-flash-err" role="alert">{error}</div>}
 
         {/* Form */}
         <form className="oq-form" onSubmit={handleSubmit}>

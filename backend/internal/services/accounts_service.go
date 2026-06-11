@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,6 +39,12 @@ type ConnectInput struct {
 // Connect saves the handle immediately — no external API call at connect time.
 // Handle validity is confirmed on the first sync.
 func (s *AccountsService) Connect(ctx context.Context, userID uuid.UUID, in ConnectInput) (*models.PlatformAccount, error) {
+	in.Platform = strings.ToLower(strings.TrimSpace(in.Platform))
+	in.Handle = strings.TrimSpace(in.Handle)
+	if in.Handle == "" {
+		return nil, fmt.Errorf("%w: handle is required", ErrBadRequest)
+	}
+
 	existing, err := s.platforms.FindByUserIDAndPlatform(ctx, userID, in.Platform)
 	if err == nil && existing != nil {
 		return nil, fmt.Errorf("%w: %s already connected", ErrConflict, in.Platform)

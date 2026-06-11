@@ -22,7 +22,7 @@ function toUserMessage(error: unknown): string {
     case 409: return 'An account with that email or username already exists'
     case 429: return 'Too many attempts — please wait a moment and try again'
     case 500: return 'Server error — please try again later'
-    case 502: return 'AI service unavailable — the analysis service did not respond'
+    case 502: return 'An external service is unavailable - please try again shortly'
     case 504: return 'Request timed out — the AI service took too long, try again'
     default:  return 'Something went wrong'
   }
@@ -49,7 +49,13 @@ api.interceptors.response.use(
       } catch {
         refreshQueue.forEach((cb) => cb(false))
         refreshQueue = []
-        window.location.href = '/login'
+        // Only force the login page from protected app routes. Public pages
+        // (landing, login, register) probe the session too — a failed refresh
+        // there must not yank the visitor away from the page.
+        const publicPaths = ['/', '/login', '/register']
+        if (!publicPaths.includes(window.location.pathname)) {
+          window.location.href = '/login'
+        }
       } finally {
         isRefreshing = false
       }

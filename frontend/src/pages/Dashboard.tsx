@@ -419,9 +419,9 @@ function LCRecentACList({ items }: { items: LCRecentProblem[] }) {
   )
 }
 
-// ── Activity Calendar (GitHub-style, 24 weeks) ────────────────────────────────
+// ── Activity Calendar (GitHub-style, 36 weeks) ────────────────────────────────
 function ActivityCalendar({ calendar, streak }: { calendar: Record<string, number>; streak?: number }) {
-  const WEEKS = 24
+  const WEEKS = 36
   const dayMap = new Map<string, number>()
   for (const [ts, count] of Object.entries(calendar)) {
     const d = new Date(parseInt(ts) * 1000)
@@ -514,7 +514,7 @@ function StreakCard({ solved }: { solved: number }) {
   return (
     <div className="oq-streak">
       <div className="oq-streak-num">{solved}</div>
-      <div className="oq-streak-lbl">solved today<br /><span className="oq-dim">keep it up</span></div>
+      <div className="oq-streak-lbl">total solved<br /><span className="oq-dim">across platforms</span></div>
     </div>
   )
 }
@@ -793,7 +793,7 @@ export default function Dashboard() {
               <div className="oq-panel">
                 <div className="oq-panel-head">
                   <h3>Activity calendar</h3>
-                  <span className="oq-dim">LeetCode · 24 weeks</span>
+                  <span className="oq-dim">LeetCode · 36 weeks</span>
                 </div>
                 {hasCalendar
                   ? <ActivityCalendar calendar={data.leetcode.calendar} streak={data.leetcode.streak} />

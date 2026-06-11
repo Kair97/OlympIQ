@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { refresh } from '../../api/auth'
+import { getProfile } from '../../api/profile'
 import Sidebar from './Sidebar'
 import StatusBar from './StatusBar'
 import ErrorBoundary from '../ErrorBoundary'
@@ -18,7 +18,13 @@ export default function AppShell() {
   }, [theme])
 
   useEffect(() => {
-    refresh()
+    // Restore the session with GET /profile — the access token cookie lives 2h.
+    // Never call /auth/refresh directly here: refresh ROTATES the token, so
+    // calling it on every reload races with itself (random logouts) and burns
+    // the strict 10/min /auth/* rate limit (then even login returns 429).
+    // If the access token has expired, the axios 401 interceptor performs a
+    // single refresh and retries this request automatically.
+    getProfile()
       .then((u) => setUser(u))
       .catch(() => { setUser(null); navigate('/login') })
       .finally(() => setLoading(false))
@@ -31,6 +37,18 @@ export default function AppShell() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+
+  // Escape closes the mobile drawer; lock body scroll while it is open
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [sidebarOpen])
 
   if (loading) {
     return (

@@ -29,6 +29,10 @@ export default function Register() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!/^[A-Za-z0-9_]+$/.test(username)) {
+      setError('Username can contain only letters, numbers, and underscores')
+      return
+    }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setError('')
     setLoading(true)
@@ -54,7 +58,7 @@ export default function Register() {
         </div>
 
         {/* Error */}
-        {error && <div className="oq-flash-err">{error}</div>}
+        {error && <div className="oq-flash-err" role="alert">{error}</div>}
 
         {/* Form */}
         <form className="oq-form" onSubmit={handleSubmit}>
@@ -81,6 +85,8 @@ export default function Register() {
               onChange={e => setUsername(e.target.value)}
               placeholder="tourney_handle"
               autoComplete="username"
+              pattern="[A-Za-z0-9_]+"
+              title="Use only letters, numbers, and underscores"
               minLength={3}
               maxLength={30}
               required

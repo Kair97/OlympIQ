@@ -1,12 +1,17 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
-# Install torch CPU-only first (avoids downloading 800MB CUDA build)
-RUN pip install --no-cache-dir --timeout=300 \
+# Install torch CPU-only first (avoids downloading 800MB CUDA build).
+# The pip cache mount keeps downloaded wheels between builds, so even a
+# cold rebuild doesn't re-download torch.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout=300 \
     torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout=300 -r requirements.txt
 
 COPY . .
 

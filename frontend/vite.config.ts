@@ -5,9 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api':    { target: 'http://localhost:8080', changeOrigin: true },
-      '/health': { target: 'http://localhost:8080', changeOrigin: true },
-      '/ready':  { target: 'http://localhost:8080', changeOrigin: true },
+      // Dockerized backend is published on host port 8081 (8080 is taken by the Forum project)
+      '/api':    { target: 'http://localhost:8081', changeOrigin: true },
+      '/health': { target: 'http://localhost:8081', changeOrigin: true },
+      '/ready':  { target: 'http://localhost:8081', changeOrigin: true },
     },
   },
   test: {

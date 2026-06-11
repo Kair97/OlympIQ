@@ -18,16 +18,12 @@ type Config struct {
 	JWTAccessTTL  time.Duration
 	JWTRefreshTTL time.Duration
 
-	GeminiAPIKey string
-	GeminiModel  string
+	N8NAnalyzerURL    string
+	N8NRoadmapURL     string
+	N8NRecommenderURL string
 
-	N8NAnalyzerURL     string
-	N8NRoadmapURL      string
-	N8NRecommenderURL  string
-
-	LeetCodeAPIURL       string
-	LeetCodePublicAPIURL string // used in n8n payloads — must be reachable from the internet
-	TaskRecommenderURL   string
+	LeetCodeAPIURL     string
+	TaskRecommenderURL string
 }
 
 // Load reads all configuration from environment variables with sensible defaults.
@@ -44,16 +40,12 @@ func Load() *Config {
 		JWTAccessTTL:  parseDuration("JWT_ACCESS_TTL", 15*time.Minute),
 		JWTRefreshTTL: parseDuration("JWT_REFRESH_TTL", 168*time.Hour),
 
-		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
-		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.0-flash"),
-
 		N8NAnalyzerURL:    os.Getenv("N8N_ANALYZER_URL"),
 		N8NRoadmapURL:     os.Getenv("N8N_ROADMAP_URL"),
 		N8NRecommenderURL: os.Getenv("N8N_RECOMMENDER_URL"),
 
-		LeetCodeAPIURL:       getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
-		LeetCodePublicAPIURL: getEnv("LEETCODE_PUBLIC_API_URL", "https://alfa-leetcode-api.onrender.com"),
-		TaskRecommenderURL:   getEnv("TASK_RECOMMENDER_URL", "http://task-recommender:8000"),
+		LeetCodeAPIURL:     getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
+		TaskRecommenderURL: getEnv("TASK_RECOMMENDER_URL", "http://task-recommender:8000"),
 	}
 }
 

@@ -235,6 +235,9 @@ export default function Profile() {
   }
 
   const initials = user?.username?.[0]?.toUpperCase() ?? '?'
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString()
+    : 'unknown'
 
   return (
     <div className="oq-page oq-prof">
@@ -245,7 +248,7 @@ export default function Profile() {
           <h1 className="oq-page-title">Account</h1>
           <p className="oq-page-sub">
             Manage your identity, connected platforms, and notification rules.
-            <span className="oq-dim"> Joined {new Date(user?.created_at ?? Date.now()).toLocaleDateString()}.</span>
+            <span className="oq-dim"> Joined {memberSince}.</span>
           </p>
         </div>
       </header>
@@ -293,7 +296,7 @@ export default function Profile() {
             </label>
             <div className="oq-form-foot">
               <button className="oq-btn-primary" type="submit">Save changes</button>
-              <span className="oq-mono oq-dim">member since {new Date(user?.created_at ?? Date.now()).toLocaleDateString()}</span>
+              <span className="oq-mono oq-dim">member since {memberSince}</span>
             </div>
           </form>
         </div>

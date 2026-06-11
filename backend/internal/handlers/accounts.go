@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"context"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 
 	"olympiq/backend/internal/services"
 )
@@ -12,11 +16,12 @@ type AccountsHandler struct {
 	stats    *services.StatsService
 	ai       *services.AIService
 	rec      *services.TaskRecommenderService
+	logger   *zap.Logger
 }
 
 // NewAccountsHandler constructs an AccountsHandler.
-func NewAccountsHandler(accounts *services.AccountsService, stats *services.StatsService, ai *services.AIService, rec *services.TaskRecommenderService) *AccountsHandler {
-	return &AccountsHandler{accounts: accounts, stats: stats, ai: ai, rec: rec}
+func NewAccountsHandler(accounts *services.AccountsService, stats *services.StatsService, ai *services.AIService, rec *services.TaskRecommenderService, logger *zap.Logger) *AccountsHandler {
+	return &AccountsHandler{accounts: accounts, stats: stats, ai: ai, rec: rec, logger: logger}
 }
 
 // ListAccounts handles GET /accounts — returns all connected platform accounts.
@@ -74,17 +79,21 @@ func (h *AccountsHandler) Sync(c *fiber.Ctx) error {
 		return errResponse(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 	if err := h.stats.SyncAll(c.Context(), uid); err != nil {
+		h.logger.Error("platform sync failed", zap.String("user_id", uid.String()), zap.Error(err))
 		return mapServiceErr(c, err)
 	}
 
 	// Register user with the ML recommender in the background (non-blocking).
 	if h.rec != nil {
 		go func() {
-			sc, err := h.ai.BuildStudentContext(c.Context(), uid)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			sc, err := h.ai.BuildStudentContext(ctx, uid)
 			if err != nil {
 				return
 			}
-			_, _ = h.rec.Recommend(c.Context(), sc, "", 1)
+			_, _ = h.rec.Recommend(ctx, sc, "", 1)
 		}()
 	}
 
@@ -117,7 +126,7 @@ func (h *AccountsHandler) GetDashboard(c *fiber.Ctx) error {
 	return ok(c, dash)
 }
 
-// TestAI handles GET /ai/test — pings the Gemini API and returns the result.
+// TestAI handles GET /ai/test and verifies n8n workflow configuration.
 func (h *AccountsHandler) TestAI(c *fiber.Ctx) error {
 	result, err := h.ai.TestConnection(c.Context())
 	if err != nil {

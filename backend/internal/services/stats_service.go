@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -33,17 +34,17 @@ func NewStatsService(
 
 // CFDashboard is the rich Codeforces data returned by GetDashboard.
 type CFDashboard struct {
-	Handle         string                  `json:"handle"`
-	Rating         int                     `json:"rating"`
-	MaxRating      int                     `json:"max_rating"`
-	Rank           string                  `json:"rank"`
-	ProblemsSolved int                     `json:"problems_solved"`
-	ContestCount   int                     `json:"contest_count"`
-	TagFreq        map[string]int          `json:"tag_freq"`
-	RatingHistory  []int                   `json:"rating_history"`
-	LangFreq       map[string]int          `json:"lang_freq"`
-	RatingBuckets  map[string]int          `json:"rating_buckets"`
-	IndexFreq      map[string]int          `json:"index_freq"`
+	Handle         string                   `json:"handle"`
+	Rating         int                      `json:"rating"`
+	MaxRating      int                      `json:"max_rating"`
+	Rank           string                   `json:"rank"`
+	ProblemsSolved int                      `json:"problems_solved"`
+	ContestCount   int                      `json:"contest_count"`
+	TagFreq        map[string]int           `json:"tag_freq"`
+	RatingHistory  []int                    `json:"rating_history"`
+	LangFreq       map[string]int           `json:"lang_freq"`
+	RatingBuckets  map[string]int           `json:"rating_buckets"`
+	IndexFreq      map[string]int           `json:"index_freq"`
 	RecentAC       []models.CFRecentProblem `json:"recent_ac"`
 }
 
@@ -55,21 +56,21 @@ type LCSkill struct {
 
 // LCDashboard is the rich LeetCode data returned by GetDashboard.
 type LCDashboard struct {
-	Handle          string                        `json:"handle"`
-	ContestRating   float64                       `json:"rating"`
-	Ranking         int                           `json:"ranking"`
-	ProblemsSolved  int                           `json:"problems_solved"`
-	EasySolved      int                           `json:"easy_solved"`
-	MediumSolved    int                           `json:"medium_solved"`
-	HardSolved      int                           `json:"hard_solved"`
-	ContestAttend   int                           `json:"contest_attend"`
-	TopPercentage   float64                       `json:"top_percentage"`
-	Streak          int                           `json:"streak"`
-	Calendar        map[string]int                `json:"calendar"`
-	Skills          []LCSkill                     `json:"skills"`
-	LanguageStats   map[string]int                `json:"language_stats"`
-	ContestHistory  []models.LeetCodeContestEntry  `json:"contest_history"`
-	RecentAC        []models.LCRecentProblem       `json:"recent_ac"`
+	Handle         string                        `json:"handle"`
+	ContestRating  float64                       `json:"rating"`
+	Ranking        int                           `json:"ranking"`
+	ProblemsSolved int                           `json:"problems_solved"`
+	EasySolved     int                           `json:"easy_solved"`
+	MediumSolved   int                           `json:"medium_solved"`
+	HardSolved     int                           `json:"hard_solved"`
+	ContestAttend  int                           `json:"contest_attend"`
+	TopPercentage  float64                       `json:"top_percentage"`
+	Streak         int                           `json:"streak"`
+	Calendar       map[string]int                `json:"calendar"`
+	Skills         []LCSkill                     `json:"skills"`
+	LanguageStats  map[string]int                `json:"language_stats"`
+	ContestHistory []models.LeetCodeContestEntry `json:"contest_history"`
+	RecentAC       []models.LCRecentProblem      `json:"recent_ac"`
 }
 
 // DashboardData is the full rich payload for the Dashboard page.
@@ -114,20 +115,26 @@ func (s *StatsService) SyncAll(ctx context.Context, userID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	var syncErrors []error
 	for _, acc := range accounts {
+		var syncErr error
 		switch acc.Platform {
 		case "codeforces":
-			if err := s.syncCF(ctx, userID, acc.Handle); err != nil {
-				return fmt.Errorf("codeforces sync: %w", err)
-			}
+			syncErr = s.syncCF(ctx, userID, acc.Handle)
 		case "leetcode":
-			if err := s.syncLC(ctx, userID, acc.Handle); err != nil {
-				return fmt.Errorf("leetcode sync: %w", err)
-			}
+			syncErr = s.syncLC(ctx, userID, acc.Handle)
+		default:
+			syncErr = fmt.Errorf("%w: unsupported platform %q", ErrBadRequest, acc.Platform)
 		}
-		_ = s.platforms.UpdateLastSynced(ctx, userID, acc.Platform, time.Now().UTC())
+		if syncErr != nil {
+			syncErrors = append(syncErrors, fmt.Errorf("%s sync: %w", acc.Platform, syncErr))
+			continue
+		}
+		if err := s.platforms.UpdateLastSynced(ctx, userID, acc.Platform, time.Now().UTC()); err != nil {
+			syncErrors = append(syncErrors, fmt.Errorf("%s sync timestamp: %w", acc.Platform, err))
+		}
 	}
-	return nil
+	return errors.Join(syncErrors...)
 }
 
 func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle string) error {
@@ -165,7 +172,7 @@ func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle stri
 		if sub.Verdict != "OK" {
 			continue
 		}
-		key := fmt.Sprintf("%d/%s", sub.Problem.ContestID, sub.Problem.Index)
+		key := codeforcesProblemKey(sub.Problem)
 		if seenProblem[key] {
 			continue
 		}
@@ -205,15 +212,15 @@ func (s *StatsService) syncCF(ctx context.Context, userID uuid.UUID, handle stri
 	solvedCount := len(seenProblem)
 
 	rawData := map[string]interface{}{
-		"user":            info,
-		"tag_freq":        tagFreq,
-		"sub_count":       solvedCount,
-		"rating_history":  historyPoints,
-		"contest_count":   len(history),
-		"lang_freq":       langFreq,
-		"rating_buckets":  ratingBuckets,
-		"index_freq":      indexFreq,
-		"recent_ac":       recentAC,
+		"user":           info,
+		"tag_freq":       tagFreq,
+		"sub_count":      solvedCount,
+		"rating_history": historyPoints,
+		"contest_count":  len(history),
+		"lang_freq":      langFreq,
+		"rating_buckets": ratingBuckets,
+		"index_freq":     indexFreq,
+		"recent_ac":      recentAC,
 	}
 	rawJSON, _ := json.Marshal(rawData)
 

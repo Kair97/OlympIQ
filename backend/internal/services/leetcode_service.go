@@ -222,15 +222,22 @@ func (s *LeetCodeService) doGet(ctx context.Context, url string) ([]byte, error)
 			lastErr = err
 			continue
 		}
-		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%w: reading LeetCode response: %v", ErrExternal, err)
+		}
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, fmt.Errorf("%w: handle not found", ErrNotFound)
 		}
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-		if err != nil {
-			return nil, err
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			return body, nil
 		}
-		return body, nil
+
+		lastErr = fmt.Errorf("LeetCode returned HTTP %d", resp.StatusCode)
+		if resp.StatusCode < http.StatusInternalServerError {
+			break
+		}
 	}
 	return nil, fmt.Errorf("%w: %v", ErrExternal, lastErr)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,14 +36,8 @@ func main() {
 
 	cfg := config.Load()
 
-	if !strings.HasPrefix(cfg.GeminiAPIKey, "AIza") {
-		logger.Warn("GEMINI_API_KEY is missing or invalid — AI features will not work. Get a free key at aistudio.google.com/apikey",
-			zap.String("key_prefix", func() string {
-				if len(cfg.GeminiAPIKey) >= 4 {
-					return cfg.GeminiAPIKey[:4] + "…"
-				}
-				return "(empty)"
-			}()))
+	if cfg.N8NAnalyzerURL == "" || cfg.N8NRoadmapURL == "" {
+		logger.Warn("one or more required n8n webhook URLs are missing; AI workflows may be unavailable")
 	}
 
 	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
@@ -85,14 +78,14 @@ func main() {
 	profileSvc := services.NewProfileService(userRepo, tokenRepo)
 	accountsSvc := services.NewAccountsService(platformRepo, redisCache, cfSvc, lcSvc)
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
-	aiSvc := services.NewAIService(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.N8NRecommenderURL, cfg.LeetCodePublicAPIURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
+	aiSvc := services.NewAIService(cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.N8NRecommenderURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
 	taskRecSvc := services.NewTaskRecommenderService(cfg.TaskRecommenderURL)
 	logger.Info("task-recommender configured", zap.String("url", cfg.TaskRecommenderURL))
 
-	healthH := handlers.New(db, &redisPinger{client: rdb}, cfg.GeminiModel)
+	healthH := handlers.New(db, &redisPinger{client: rdb}, "n8n")
 	authH := handlers.NewAuthHandler(authSvc, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.IsProduction())
 	profileH := handlers.NewProfileHandler(profileSvc)
-	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc, taskRecSvc)
+	accountsH := handlers.NewAccountsHandler(accountsSvc, statsSvc, aiSvc, taskRecSvc, logger)
 	roadmapH := handlers.NewRoadmapHandler(aiSvc, roadmapRepo, goalsRepo)
 	recsH := handlers.NewRecommendationsHandler(aiSvc, taskRecSvc)
 	analyzerH := handlers.NewAnalyzerHandler(aiSvc, analysesRepo)

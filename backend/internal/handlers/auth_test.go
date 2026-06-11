@@ -91,6 +91,35 @@ func TestRegisterHandler_InvalidInput(t *testing.T) {
 	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 }
 
+func TestRegisterHandler_InvalidUsernameReturnsFriendlyMessage(t *testing.T) {
+	app := buildAuthApp(t)
+	req := httptest.NewRequest("POST", "/auth/register", jsonBody(t, map[string]string{
+		"email": "kair@gmail.com", "username": "kair@gmail.com", "password": "password123",
+	}))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &result))
+	assert.Equal(t, "Username can contain only letters, numbers, and underscores.", result["error"])
+}
+
+func TestRegisterHandler_UsernameAllowsUnderscore(t *testing.T) {
+	app := buildAuthApp(t)
+	req := httptest.NewRequest("POST", "/auth/register", jsonBody(t, map[string]string{
+		"email": "kair@gmail.com", "username": "kair_user", "password": "password123",
+	}))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, fiber.StatusCreated, resp.StatusCode)
+}
+
 func TestLoginHandler_Success(t *testing.T) {
 	app := buildAuthApp(t)
 

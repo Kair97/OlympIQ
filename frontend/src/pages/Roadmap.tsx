@@ -529,7 +529,7 @@ export default function Roadmap() {
       else if (msg.includes('platform') || msg.includes('connect'))
         s().setGenError('No platform connected — go to Profile and connect Codeforces or LeetCode first.')
       else
-        s().setGenError('Failed to generate — check your GEMINI_API_KEY in .env and restart Docker.')
+        s().setGenError('Failed to generate - check the n8n roadmap workflow and webhook URL.')
     } finally {
       s().setGenerating(false)
     }

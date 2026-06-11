@@ -1,10 +1,16 @@
+# syntax=docker/dockerfile:1
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+# Cache mounts persist the module download and the Go compiler cache between
+# builds — incremental rebuilds only recompile changed packages.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o server  ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -o migrate ./cmd/migrate
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -o server  ./cmd/server && \
+    CGO_ENABLED=0 GOOS=linux go build -o migrate ./cmd/migrate
 
 FROM alpine:3.19
 RUN apk add --no-cache wget ca-certificates tzdata

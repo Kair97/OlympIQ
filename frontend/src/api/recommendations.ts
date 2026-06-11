@@ -46,6 +46,10 @@ export interface RecsProb {
 // or display names used as keys (agent may return either)
 export interface StructuredRecs {
   meta: RecsMeta
+  // Full list of topic slugs available in the agent's response ("any" first).
+  // The backend filters the buckets to the requested topic but always returns
+  // the complete topic list here so the dropdown can show every option.
+  available_topics?: string[]
   leetcode: Record<string, RecsProb[]>
   codeforces: Record<string, RecsProb[]>
 }
@@ -72,6 +76,7 @@ export const getRecommendations = (params: RecommendParams = {}) => {
 }
 
 // POST /recommendations — triggers the n8n recommender (or serves Redis cache).
-// The backend builds the full student context server-side; body is intentionally empty.
-export const postRecommendations = () =>
-  post<RecsResponse>('/recommendations', {})
+// The backend builds the full student context server-side and filters the
+// response to the requested topic ("any" returns the agent's best-fit bucket).
+export const postRecommendations = (topic: string = 'any') =>
+  post<RecsResponse>('/recommendations', { topic })

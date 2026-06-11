@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -16,9 +15,6 @@ import (
 	"olympiq/backend/internal/models"
 	"olympiq/backend/internal/repository"
 )
-
-// geminiBaseURL is the Google Generative Language REST endpoint.
-const geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 // StudentContext aggregates all user data needed for AI prompts.
 type StudentContext struct {
@@ -44,27 +40,23 @@ type StudentContext struct {
 	Goals *models.UserGoal
 }
 
-// AIService handles AI calls for roadmap, razbor, and recommendations.
-// Uses n8n webhooks when configured; falls back to Gemini otherwise.
+// AIService handles AI calls through n8n workflows.
 type AIService struct {
-	apiKey               string
-	model                string
-	n8nAnalyzerURL       string
-	n8nRoadmapURL        string
-	n8nRecommenderURL    string
-	lcPublicAPIURL       string // public alfa-leetcode-api URL used in n8n payloads
-	http                 *http.Client
-	platforms            repository.PlatformRepository
-	stats                repository.StatsRepository
-	goals                repository.GoalsRepository
-	cache                CacheStore
-	cf                   *CodeforcesService
-	lc                   *LeetCodeService
+	n8nAnalyzerURL    string
+	n8nRoadmapURL     string
+	n8nRecommenderURL string
+	http              *http.Client
+	platforms         repository.PlatformRepository
+	stats             repository.StatsRepository
+	goals             repository.GoalsRepository
+	cache             CacheStore
+	cf                *CodeforcesService
+	lc                *LeetCodeService
 }
 
 // NewAIService constructs an AIService.
 func NewAIService(
-	apiKey, model, n8nAnalyzerURL, n8nRoadmapURL, n8nRecommenderURL, lcPublicAPIURL string,
+	n8nAnalyzerURL, n8nRoadmapURL, n8nRecommenderURL string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -73,13 +65,13 @@ func NewAIService(
 	lc *LeetCodeService,
 ) *AIService {
 	return &AIService{
-		apiKey:            apiKey,
-		model:             model,
 		n8nAnalyzerURL:    n8nAnalyzerURL,
 		n8nRoadmapURL:     n8nRoadmapURL,
 		n8nRecommenderURL: n8nRecommenderURL,
-		lcPublicAPIURL:    lcPublicAPIURL,
-		http:              &http.Client{Timeout: 150 * time.Second},
+		// n8n normally answers in 8-30s; 60s covers cold starts. Must stay well
+		// under the frontend nginx proxy_read_timeout (150s) even when the
+		// handler falls back to a second n8n call after a first timeout.
+		http: &http.Client{Timeout: 60 * time.Second},
 		platforms:         platforms,
 		stats:             stats,
 		goals:             goals,
@@ -87,29 +79,6 @@ func NewAIService(
 		cf:                cf,
 		lc:                lc,
 	}
-}
-
-// lcProblemURLToAPIURL converts a leetcode.com problem URL into the equivalent
-// alfa-leetcode-api /select endpoint URL so n8n can fetch problem data without
-// hitting leetcode.com directly (which returns 403 to non-browser requests).
-//
-//	https://leetcode.com/problems/two-sum/           → {base}/select?titleSlug=two-sum
-//	https://leetcode.com/problems/two-sum/description/ → same
-func (s *AIService) lcProblemURLToAPIURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || !strings.Contains(parsed.Host, "leetcode.com") {
-		return rawURL // not a LC URL — return as-is (e.g. Codeforces)
-	}
-	// Path looks like /problems/{titleSlug} or /problems/{titleSlug}/description/...
-	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	for i, p := range parts {
-		if p == "problems" && i+1 < len(parts) && parts[i+1] != "" {
-			slug := parts[i+1]
-			base := strings.TrimRight(s.lcPublicAPIURL, "/")
-			return base + "/select?titleSlug=" + slug
-		}
-	}
-	return rawURL
 }
 
 // BuildStudentContext assembles all user data for AI prompts.
@@ -144,7 +113,7 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 				seen := make(map[string]bool)
 				for _, sub := range subs {
 					if sub.Verdict == "OK" {
-						k := fmt.Sprintf("%d/%s", sub.Problem.ContestID, sub.Problem.Index)
+						k := codeforcesProblemKey(sub.Problem)
 						if !seen[k] {
 							seen[k] = true
 							sc.CFSolvedKeys = append(sc.CFSolvedKeys, k)
@@ -205,23 +174,28 @@ func (s *AIService) BuildStudentContext(ctx context.Context, userID uuid.UUID) (
 	return sc, nil
 }
 
-// TestConnection pings the Gemini API with a trivial prompt to verify the key works.
+// TestConnection verifies that the required n8n webhook URLs are configured.
 func (s *AIService) TestConnection(ctx context.Context) (string, error) {
-	return s.callGemini(ctx, "You are a helpful assistant.", "Reply with exactly: OlympIQ AI is working!")
+	_ = ctx
+	var missing []string
+	if s.n8nAnalyzerURL == "" {
+		missing = append(missing, "N8N_ANALYZER_URL")
+	}
+	if s.n8nRoadmapURL == "" {
+		missing = append(missing, "N8N_ROADMAP_URL")
+	}
+	if len(missing) > 0 {
+		return "", fmt.Errorf("%w: missing %s", ErrExternal, strings.Join(missing, ", "))
+	}
+	return "n8n AI workflows are configured", nil
 }
 
-// GenerateRoadmap generates a roadmap. Uses n8n webhook if configured, otherwise Gemini.
-// Falls back to Gemini if n8n returns an empty or invalid response.
+// GenerateRoadmap generates a roadmap through the n8n roadmap workflow.
 func (s *AIService) GenerateRoadmap(ctx context.Context, sc *StudentContext, mode string) (string, error) {
-	if s.n8nRoadmapURL != "" {
-		result, err := s.callN8NRoadmap(ctx, sc, mode)
-		if err == nil && result != "" {
-			return result, nil
-		}
-		// n8n failed or returned empty — fall back to Gemini
+	if s.n8nRoadmapURL == "" {
+		return "", fmt.Errorf("%w: N8N_ROADMAP_URL is not configured", ErrExternal)
 	}
-	userMsg := buildRoadmapUserMessage(sc, mode)
-	return s.callGemini(ctx, roadmapSystemPrompt, userMsg)
+	return s.callN8NRoadmap(ctx, sc, mode)
 }
 
 // callN8NRoadmap sends the full user context to the n8n roadmap webhook.
@@ -238,15 +212,19 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 		weeklyHours = *sc.Goals.WeeklyHours
 	}
 
+	if mode == "" {
+		mode = "all"
+	}
+
 	payload := map[string]interface{}{
 		"username":     username,
-		"mode":         "all",
+		"mode":         mode,
 		"weekly_hours": weeklyHours,
 	}
 
 	// Codeforces data
 	if sc.CFHandle != "" {
-		cfTopics := sc.CFTagFreq
+		cfTopics := normalizeCFTopics(sc.CFTagFreq)
 		if cfTopics == nil {
 			cfTopics = make(map[string]int)
 		}
@@ -339,18 +317,12 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 	return cleaned, nil
 }
 
-// AnalyzeProblem analyzes a problem. Uses n8n webhook if configured, otherwise Gemini.
-// Falls back to Gemini if n8n returns an empty or invalid response.
+// AnalyzeProblem analyzes a problem through the n8n analyzer workflow.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
-	if s.n8nAnalyzerURL != "" {
-		result, err := s.callN8NAnalyzer(ctx, problemURL)
-		if err == nil && result != "" {
-			return result, nil
-		}
-		// n8n failed or returned empty — fall back to Gemini
+	if s.n8nAnalyzerURL == "" {
+		return "", fmt.Errorf("%w: N8N_ANALYZER_URL is not configured", ErrExternal)
 	}
-	userMsg := fmt.Sprintf("Analyze this competitive programming problem:\n\nURL: %s\n\nProvide a complete educational razbor. Do not write any working solution code.", sanitize(problemURL))
-	return s.callGemini(ctx, razborSystemPrompt, userMsg)
+	return s.callN8NAnalyzer(ctx, problemURL)
 }
 
 // callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
@@ -415,12 +387,6 @@ func (s *AIService) callN8NAnalyzer(ctx context.Context, problemURL string) (str
 	return cleaned, nil
 }
 
-// GenerateRecommendations calls Gemini and returns a JSON array of problems.
-func (s *AIService) GenerateRecommendations(ctx context.Context, sc *StudentContext, topic, mode string) (string, error) {
-	userMsg := buildRecommendationsUserMessage(sc, topic, mode)
-	return s.callGemini(ctx, recommendationsSystemPrompt, userMsg)
-}
-
 // n8nRecProblem is the normalized format returned by the n8n recommendations fallback.
 type n8nRecProblem struct {
 	Rank         int      `json:"rank"`
@@ -433,6 +399,30 @@ type n8nRecProblem struct {
 	LCDifficulty *string  `json:"lc_difficulty"`
 	Tags         []string `json:"tags"`
 	Reason       string   `json:"reason"`
+}
+
+type structuredRecsMeta struct {
+	Username         string   `json:"username"`
+	GeneratedAt      string   `json:"generated_at,omitempty"`
+	CodeforcesRating *int     `json:"codeforces_rating,omitempty"`
+	LeetcodeSolved   *int     `json:"leetcode_solved,omitempty"`
+	WeakTopics       []string `json:"weak_topics"`
+	NextBestTopic    string   `json:"next_best_topic"`
+}
+
+type structuredRecsProblem struct {
+	Title      string   `json:"title"`
+	URL        string   `json:"url"`
+	Difficulty *string  `json:"difficulty"`
+	Rating     *int     `json:"rating"`
+	Tags       []string `json:"tags"`
+	Reason     string   `json:"reason"`
+}
+
+type structuredRecsResponse struct {
+	Meta       structuredRecsMeta                 `json:"meta"`
+	Leetcode   map[string][]structuredRecsProblem `json:"leetcode"`
+	Codeforces map[string][]structuredRecsProblem `json:"codeforces"`
 }
 
 // GenerateN8NRecommendations calls the n8n roadmap webhook in topic mode and
@@ -529,7 +519,7 @@ func (s *AIService) GenerateN8NRecommendations(ctx context.Context, sc *StudentC
 // the raw structured JSON: { meta, leetcode: {topic: [problems]}, codeforces: {topic: [problems]} }.
 // Results are cached in Redis for 6 hours to avoid redundant n8n cold-start latency.
 func (s *AIService) GenerateStructuredRecommendations(ctx context.Context, sc *StudentContext) (string, error) {
-	if s.n8nRecommenderURL == "" {
+	if s.n8nRecommenderURL == "" && s.n8nRoadmapURL == "" {
 		return "", fmt.Errorf("n8n recommender URL not configured")
 	}
 
@@ -540,9 +530,11 @@ func (s *AIService) GenerateStructuredRecommendations(ctx context.Context, sc *S
 
 	// Serve from cache if fresh (6h TTL)
 	if username != "" {
-		cacheKey := "recommendations:" + username
+		cacheKey := "recommendations:v2:" + username
 		if cached, err := s.cache.Get(ctx, cacheKey); err == nil && cached != "" {
-			return cached, nil
+			if normalized, normErr := normalizeStructuredRecs(cached); normErr == nil {
+				return normalized, nil
+			}
 		}
 	}
 
@@ -550,10 +542,14 @@ func (s *AIService) GenerateStructuredRecommendations(ctx context.Context, sc *S
 	if err != nil {
 		return "", err
 	}
+	result, err = normalizeStructuredRecs(result)
+	if err != nil {
+		return "", err
+	}
 
 	// Cache for 6 hours so re-opening the page costs zero n8n calls
 	if username != "" && result != "" {
-		_ = s.cache.Set(ctx, "recommendations:"+username, result, 6*time.Hour)
+		_ = s.cache.Set(ctx, "recommendations:v2:"+username, result, 6*time.Hour)
 	}
 
 	return result, nil
@@ -562,6 +558,14 @@ func (s *AIService) GenerateStructuredRecommendations(ctx context.Context, sc *S
 // callN8NRecommender sends the student context to the dedicated n8n recommender webhook.
 // Uses the same payload format as callN8NRoadmap.
 func (s *AIService) callN8NRecommender(ctx context.Context, sc *StudentContext) (string, error) {
+	webhookURL := s.n8nRecommenderURL
+	if webhookURL == "" {
+		webhookURL = s.n8nRoadmapURL
+	}
+	if webhookURL == "" {
+		return "", fmt.Errorf("n8n recommender URL not configured")
+	}
+
 	username := sc.CFHandle
 	if username == "" {
 		username = sc.LCHandle
@@ -574,11 +578,12 @@ func (s *AIService) callN8NRecommender(ctx context.Context, sc *StudentContext) 
 
 	payload := map[string]interface{}{
 		"username":     username,
+		"mode":         "topic",
 		"weekly_hours": weeklyHours,
 	}
 
 	if sc.CFHandle != "" {
-		cfTopics := sc.CFTagFreq
+		cfTopics := normalizeCFTopics(sc.CFTagFreq)
 		if cfTopics == nil {
 			cfTopics = make(map[string]int)
 		}
@@ -624,7 +629,7 @@ func (s *AIService) callN8NRecommender(ctx context.Context, sc *StudentContext) 
 		return "", fmt.Errorf("%w: failed to build recommender request: %v", ErrExternal, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.n8nRecommenderURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrExternal, err)
 	}
@@ -669,72 +674,7 @@ func (s *AIService) callN8NRecommender(ctx context.Context, sc *StudentContext) 
 	return cleaned, nil
 }
 
-// callGemini sends a request to the Gemini generateContent REST endpoint.
-func (s *AIService) callGemini(ctx context.Context, systemPrompt, userMsg string) (string, error) {
-	reqBody := map[string]interface{}{
-		"systemInstruction": map[string]interface{}{
-			"parts": []map[string]string{{"text": systemPrompt}},
-		},
-		"contents": []map[string]interface{}{
-			{"role": "user", "parts": []map[string]string{{"text": userMsg}}},
-		},
-		"generationConfig": map[string]interface{}{
-			"maxOutputTokens":  4096,
-			"temperature":      0.2,
-			"responseMimeType": "application/json",
-		},
-	}
-
-	b, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	url := fmt.Sprintf("%s/%s:generateContent?key=%s", geminiBaseURL, s.model, s.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrExternal, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return "", err
-	}
-
-	// Gemini response shape
-	var result struct {
-		Candidates []struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		} `json:"candidates"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("%w: failed to parse Gemini response (status %d): %v", ErrExternal, resp.StatusCode, err)
-	}
-	if result.Error != nil {
-		return "", fmt.Errorf("%w: Gemini error: %s", ErrExternal, result.Error.Message)
-	}
-	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
-		return stripMarkdownFences(result.Candidates[0].Content.Parts[0].Text), nil
-	}
-	return "", fmt.Errorf("%w: empty Gemini response", ErrExternal)
-}
-
-// stripMarkdownFences removes ```json ... ``` wrapping that Gemini sometimes adds
-// despite being told to return raw JSON.
+// stripMarkdownFences removes optional markdown wrapping from workflow output.
 func stripMarkdownFences(s string) string {
 	s = strings.TrimSpace(s)
 	if !strings.HasPrefix(s, "```") {
@@ -751,53 +691,276 @@ func stripMarkdownFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
+func normalizeStructuredRecs(raw string) (string, error) {
+	var recs structuredRecsResponse
+	if err := json.Unmarshal([]byte(raw), &recs); err != nil {
+		// n8n model nodes with a low max-tokens limit cut the JSON mid-string;
+		// try to salvage the complete buckets instead of dropping the whole response.
+		repaired, repairErr := repairTruncatedJSON(raw)
+		if repairErr != nil || json.Unmarshal([]byte(repaired), &recs) != nil {
+			return "", fmt.Errorf("%w: invalid structured recommendations: %v", ErrExternal, err)
+		}
+	}
+	if recs.Leetcode == nil {
+		recs.Leetcode = make(map[string][]structuredRecsProblem)
+	}
+	if recs.Codeforces == nil {
+		recs.Codeforces = make(map[string][]structuredRecsProblem)
+	}
+	if recs.Meta.WeakTopics == nil {
+		recs.Meta.WeakTopics = []string{}
+	}
+	if recs.Meta.Username == "" {
+		return "", fmt.Errorf("%w: structured recommendations missing meta.username", ErrExternal)
+	}
+	if len(recs.Leetcode) == 0 && len(recs.Codeforces) == 0 {
+		return "", fmt.Errorf("%w: structured recommendations missing problem buckets", ErrExternal)
+	}
+	body, err := json.Marshal(recs)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// repairTruncatedJSON salvages a JSON document that was cut off mid-stream
+// (e.g. by an LLM max-tokens limit). It drops everything after the last fully
+// closed nested value and closes the remaining open brackets.
+func repairTruncatedJSON(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", fmt.Errorf("empty JSON")
+	}
+
+	openStack := func(prefix string) ([]byte, bool) {
+		var stack []byte
+		inStr, esc := false, false
+		for i := 0; i < len(prefix); i++ {
+			c := prefix[i]
+			if inStr {
+				if esc {
+					esc = false
+				} else if c == '\\' {
+					esc = true
+				} else if c == '"' {
+					inStr = false
+				}
+				continue
+			}
+			switch c {
+			case '"':
+				inStr = true
+			case '{':
+				stack = append(stack, '}')
+			case '[':
+				stack = append(stack, ']')
+			case '}', ']':
+				if len(stack) == 0 || stack[len(stack)-1] != c {
+					return nil, false
+				}
+				stack = stack[:len(stack)-1]
+			}
+		}
+		return stack, !inStr
+	}
+
+	stack, ok := openStack(s)
+	if !ok {
+		// Truncated inside a string — cut back to the last complete close bracket below.
+	} else if len(stack) == 0 {
+		return s, nil // already complete
+	}
+
+	// Find the last position where a nested value was fully closed.
+	lastComplete := -1
+	{
+		var st []byte
+		inStr, esc := false, false
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if inStr {
+				if esc {
+					esc = false
+				} else if c == '\\' {
+					esc = true
+				} else if c == '"' {
+					inStr = false
+				}
+				continue
+			}
+			switch c {
+			case '"':
+				inStr = true
+			case '{':
+				st = append(st, '}')
+			case '[':
+				st = append(st, ']')
+			case '}', ']':
+				if len(st) == 0 || st[len(st)-1] != c {
+					return "", fmt.Errorf("mismatched brackets")
+				}
+				st = st[:len(st)-1]
+				if len(st) > 0 {
+					lastComplete = i
+				}
+			}
+		}
+	}
+	if lastComplete < 0 {
+		return "", fmt.Errorf("JSON not repairable")
+	}
+
+	out := strings.TrimRight(s[:lastComplete+1], " \t\r\n,")
+	stack, ok = openStack(out)
+	if !ok || stack == nil {
+		return "", fmt.Errorf("JSON not repairable")
+	}
+	var b strings.Builder
+	b.WriteString(out)
+	for i := len(stack) - 1; i >= 0; i-- {
+		b.WriteByte(stack[i])
+	}
+	return b.String(), nil
+}
+
+// topicSlugify converts a topic display name or key to a lowercase
+// underscore slug, e.g. "Dynamic Programming" → "dynamic_programming".
+func topicSlugify(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	var b strings.Builder
+	pendingSep := false
+	for _, r := range t {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if isAlnum {
+			if pendingSep && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			pendingSep = false
+			b.WriteRune(r)
+		} else {
+			pendingSep = true
+		}
+	}
+	return b.String()
+}
+
+// topicSlugMatch compares two topic slugs, tolerating singular/plural
+// variations ("graph" matches "graphs", "string" matches "strings").
+func topicSlugMatch(a, b string) bool {
+	if a == b {
+		return true
+	}
+	return strings.TrimSuffix(a, "s") == strings.TrimSuffix(b, "s")
+}
+
+// FilterStructuredRecs filters the full structured recommendations JSON down
+// to the requested topic and annotates the result with all available topic
+// slugs. An empty topic, "any" or "all" returns the agent's best-fit bucket
+// ("any") when present, otherwise a flattened union of every bucket.
+func FilterStructuredRecs(raw, topic string) (string, error) {
+	var recs structuredRecsResponse
+	if err := json.Unmarshal([]byte(raw), &recs); err != nil {
+		return "", fmt.Errorf("%w: invalid structured recommendations: %v", ErrExternal, err)
+	}
+
+	// Collect every topic slug across both platforms ("any" pinned first).
+	seen := make(map[string]string) // de-pluralized form → slug
+	var available []string
+	hasAny := false
+	for _, dict := range []map[string][]structuredRecsProblem{recs.Leetcode, recs.Codeforces} {
+		for key := range dict {
+			slug := topicSlugify(key)
+			if slug == "any" || slug == "all" {
+				hasAny = true
+				continue
+			}
+			base := strings.TrimSuffix(slug, "s")
+			if _, dup := seen[base]; !dup {
+				seen[base] = slug
+				available = append(available, slug)
+			}
+		}
+	}
+	sortStrings(available)
+	if hasAny {
+		available = append([]string{"any"}, available...)
+	}
+	if available == nil {
+		available = []string{}
+	}
+
+	want := topicSlugify(topic)
+	filter := func(dict map[string][]structuredRecsProblem) map[string][]structuredRecsProblem {
+		out := make(map[string][]structuredRecsProblem)
+		if want == "" || want == "any" || want == "all" {
+			// Best-fit bucket if the agent provided one.
+			for key, probs := range dict {
+				s := topicSlugify(key)
+				if s == "any" || s == "all" {
+					out["any"] = probs
+					return out
+				}
+			}
+			// Otherwise flatten everything, deduplicating by URL.
+			var flat []structuredRecsProblem
+			urls := make(map[string]bool)
+			for _, key := range sortedKeys(dict) {
+				for _, p := range dict[key] {
+					if p.URL != "" && urls[p.URL] {
+						continue
+					}
+					urls[p.URL] = true
+					flat = append(flat, p)
+				}
+			}
+			if len(flat) > 0 {
+				out["any"] = flat
+			}
+			return out
+		}
+		for key, probs := range dict {
+			if topicSlugMatch(topicSlugify(key), want) {
+				out[want] = append(out[want], probs...)
+			}
+		}
+		return out
+	}
+
+	out := map[string]interface{}{
+		"meta":             recs.Meta,
+		"available_topics": available,
+		"leetcode":         filter(recs.Leetcode),
+		"codeforces":       filter(recs.Codeforces),
+	}
+	body, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j] < s[j-1]; j-- {
+			s[j], s[j-1] = s[j-1], s[j]
+		}
+	}
+}
+
+func sortedKeys(m map[string][]structuredRecsProblem) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+	return keys
+}
+
 func sanitize(s string) string {
 	if len(s) > 10000 {
 		return s[:10000]
 	}
 	return s
-}
-
-func buildRoadmapUserMessage(sc *StudentContext, mode string) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Generate a %s roadmap for this student.\n\n== STUDENT STATISTICS ==\n", mode))
-	sb.WriteString(fmt.Sprintf("Codeforces Handle: %s\n", orNA(sc.CFHandle)))
-	sb.WriteString(fmt.Sprintf("Codeforces Rating: %d (%s)\n", sc.CFRating, orNA(sc.CFRank)))
-	sb.WriteString(fmt.Sprintf("Codeforces Max Rating: %d\n", sc.CFMaxRating))
-	sb.WriteString("Solved problems by topic:\n")
-	for tag, count := range sc.CFTagFreq {
-		sb.WriteString(fmt.Sprintf("  - %s: %d\n", tag, count))
-	}
-	sb.WriteString(fmt.Sprintf("\nLeetCode Handle: %s\n", orNA(sc.LCHandle)))
-	sb.WriteString(fmt.Sprintf("LeetCode Ranking: #%d\n", sc.LCRanking))
-	sb.WriteString(fmt.Sprintf("LeetCode Solved: %d (%d easy / %d medium / %d hard)\n", sc.LCTotalSolved, sc.LCEasy, sc.LCMedium, sc.LCHard))
-	sb.WriteString(fmt.Sprintf("LeetCode Contest Rating: %.0f\n", sc.LCContestRating))
-
-	if sc.Goals != nil {
-		sb.WriteString(fmt.Sprintf("\n== STUDENT GOALS ==\nGoal type: %s\n", sc.Goals.GoalType))
-		if sc.Goals.TargetRating != nil {
-			sb.WriteString(fmt.Sprintf("Target rating: %d\n", *sc.Goals.TargetRating))
-		}
-	}
-	sb.WriteString(fmt.Sprintf("\n== INSTRUCTIONS ==\nMode: %s\nGenerate a focused, realistic plan.\n", mode))
-	return sb.String()
-}
-
-func buildRecommendationsUserMessage(sc *StudentContext, topic, mode string) string {
-	var sb strings.Builder
-	sb.WriteString("Recommend 10 unsolved problems for this student.\n\n== STUDENT PROFILE ==\n")
-	sb.WriteString(fmt.Sprintf("Codeforces Rating: %d (%s)\n", sc.CFRating, orNA(sc.CFRank)))
-	sb.WriteString(fmt.Sprintf("LeetCode Solved: %d/%d/%d\n", sc.LCEasy, sc.LCMedium, sc.LCHard))
-
-	if len(sc.CFSolvedKeys) > 0 {
-		sb.WriteString("\n== FILTER (DO NOT RECOMMEND — already solved) ==\n")
-		sb.WriteString(fmt.Sprintf("Codeforces solved: %s\n", strings.Join(sc.CFSolvedKeys, ", ")))
-	}
-	if len(sc.LCSolvedSlugs) > 0 {
-		sb.WriteString(fmt.Sprintf("LeetCode solved: %s\n", strings.Join(sc.LCSolvedSlugs, ", ")))
-	}
-	sb.WriteString(fmt.Sprintf("\n== REQUEST ==\nTopic filter: %s\nMode: %s\nReturn exactly 10 problems.\n", orNA(topic), orNA(mode)))
-	return sb.String()
 }
 
 func orNA(s string) string {
@@ -807,32 +970,45 @@ func orNA(s string) string {
 	return s
 }
 
-const roadmapSystemPrompt = `You are OlympIQ Coach, an expert competitive programming mentor with deep knowledge of Codeforces, LeetCode, and competitive programming pedagogy.
+func normalizeCFTopics(topics map[string]int) map[string]int {
+	if len(topics) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(topics))
+	for topic, count := range topics {
+		out[canonicalCFTopic(topic)] += count
+	}
+	return out
+}
 
-Your task is to generate a highly personalized study roadmap based on the student's real statistics. You must analyze what they have already solved, identify their genuine weak areas, and prescribe specific next steps.
+func canonicalCFTopic(topic string) string {
+	t := strings.ToLower(strings.TrimSpace(topic))
+	switch t {
+	case "dp":
+		return "Dynamic Programming"
+	case "graphs", "graph matchings", "dfs and similar", "dsu", "flows", "shortest paths", "trees":
+		return "Graph"
+	case "number theory":
+		return "Number Theory"
+	case "binary search", "two pointers", "data structures", "brute force", "bitmasks", "combinatorics", "constructive algorithms", "divide and conquer", "expression parsing", "fft", "games", "geometry", "greedy", "hashing", "implementation", "math", "matrices", "probabilities", "schedules", "sortings", "string suffix structures", "strings", "ternary search":
+		return titleTopic(t)
+	default:
+		return titleTopic(topic)
+	}
+}
 
-Rules:
-- Be specific, not generic. Do not recommend topics the student has already mastered.
-- Every problem recommendation must include a real, working URL on Codeforces or LeetCode.
-- Difficulty must be calibrated: for Codeforces problems, recommend problems 100-200 rating points above the student's current level for learning, and at their level for confidence building.
-- Explain WHY each topic or problem is recommended for this specific student.
-- Return ONLY valid JSON matching the schema. No markdown, no explanation text, no code fences.`
-
-const razborSystemPrompt = `You are OlympIQ Razbor, an expert competitive programming instructor who specializes in teaching algorithmic thinking.
-
-Your role is to provide a deep educational breakdown of competitive programming problems — helping students understand the approach, not just the answer. You never provide a complete working solution or final code. Instead, you teach the reasoning process.
-
-Rules:
-- Never write a complete solution or full working code.
-- Hints must be progressive — each hint reveals a little more, not the full answer.
-- Similar problems must have real, working URLs.
-- Return ONLY valid JSON matching the schema. No markdown, no explanation text, no code fences.`
-
-const recommendationsSystemPrompt = `You are OlympIQ Recommender, a competitive programming coach who selects the most effective next problems for a student to practice.
-
-Rules:
-- Never recommend problems the student has already solved (the solved list is provided).
-- Difficulty calibration: mix 60% at current level (for confidence) and 40% slightly above (for growth).
-- Every problem URL must be real and directly accessible on Codeforces or LeetCode.
-- The reason field must be specific to this student — reference their actual stats.
-- Return ONLY a valid JSON array. No markdown, no explanation text, no code fences.`
+func titleTopic(topic string) string {
+	words := strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(strings.TrimSpace(topic)))
+	for i, word := range words {
+		lower := strings.ToLower(word)
+		if lower == "and" {
+			words[i] = lower
+			continue
+		}
+		if lower == "" {
+			continue
+		}
+		words[i] = strings.ToUpper(lower[:1]) + lower[1:]
+	}
+	return strings.Join(words, " ")
+}

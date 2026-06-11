@@ -20,7 +20,7 @@ func NewRecommendationsHandler(ai *services.AIService, rec *services.TaskRecomme
 }
 
 // List handles GET /recommendations.
-// Priority: n8n structured recommender → ML microservice → n8n roadmap → Gemini.
+// Priority: n8n structured recommender → ML microservice → n8n roadmap.
 func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 	uid, err := userUUID(c)
 	if err != nil {
@@ -28,7 +28,14 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 	}
 
 	topic := c.Query("topic", "")
-	mode := c.Query("mode", "general")
+	if topic == "" && len(c.Body()) > 0 {
+		var in struct {
+			Topic string `json:"topic"`
+		}
+		if json.Unmarshal(c.Body(), &in) == nil {
+			topic = in.Topic
+		}
+	}
 	topK := 10
 
 	sc, err := h.ai.BuildStudentContext(c.Context(), uid)
@@ -37,11 +44,15 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 	}
 
 	// ── 1. n8n structured recommender (new format) ───────────────────────────
+	// The full response is cached server-side; the selected topic is filtered
+	// out of the cached payload here, so switching topics costs no n8n call.
 	structuredRaw, structErr := h.ai.GenerateStructuredRecommendations(c.Context(), sc)
 	if structErr == nil && structuredRaw != "" {
-		var parsed interface{}
-		if json.Unmarshal([]byte(structuredRaw), &parsed) == nil {
-			return ok(c, parsed)
+		if filtered, fErr := services.FilterStructuredRecs(structuredRaw, topic); fErr == nil {
+			var parsed interface{}
+			if json.Unmarshal([]byte(filtered), &parsed) == nil {
+				return ok(c, parsed)
+			}
 		}
 	}
 
@@ -62,14 +73,13 @@ func (h *RecommendationsHandler) List(c *fiber.Ctx) error {
 		}
 	}
 
-	// ── 4. Gemini last resort ─────────────────────────────────────────────────
-	raw, err := h.ai.GenerateRecommendations(c.Context(), sc, topic, mode)
-	if err != nil {
-		return mapServiceErr(c, err)
+	if n8nErr != nil {
+		return mapServiceErr(c, n8nErr)
 	}
-	var parsed interface{}
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return errResponse(c, fiber.StatusInternalServerError, "failed to parse recommendations")
+	if structErr != nil {
+		return mapServiceErr(c, structErr)
 	}
-	return ok(c, parsed)
+	return errResponse(c, fiber.StatusBadGateway, "recommendation services are unavailable")
 }
+
+

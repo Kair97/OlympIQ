@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"errors"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 
 	"olympiq/backend/internal/services"
@@ -27,7 +29,7 @@ func NewAuthHandler(auth *services.AuthService, accessTTL, refreshTTL time.Durat
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var in services.RegisterInput
 	if err := parseAndValidate(c, &in); err != nil {
-		return errResponse(c, fiber.StatusBadRequest, "invalid input: "+err.Error())
+		return errResponse(c, fiber.StatusBadRequest, registerValidationMessage(err))
 	}
 	user, err := h.auth.Register(c.Context(), in)
 	if err != nil {
@@ -43,6 +45,37 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		"data":    fiber.Map{"id": user.ID, "email": user.Email, "username": user.Username},
 		"error":   nil,
 	})
+}
+
+func registerValidationMessage(err error) string {
+	var validationErrs validator.ValidationErrors
+	if !errors.As(err, &validationErrs) || len(validationErrs) == 0 {
+		return "Please check the registration fields and try again."
+	}
+
+	field := validationErrs[0]
+	switch field.Field() {
+	case "Email":
+		return "Enter a valid email address."
+	case "Username":
+		switch field.Tag() {
+		case "required":
+			return "Enter a username."
+		case "min":
+			return "Username must be at least 3 characters."
+		case "max":
+			return "Username must be 30 characters or fewer."
+		default:
+			return "Username can contain only letters, numbers, and underscores."
+		}
+	case "Password":
+		if field.Tag() == "required" {
+			return "Enter a password."
+		}
+		return "Password must be at least 8 characters."
+	default:
+		return "Please check the registration fields and try again."
+	}
 }
 
 // Login handles POST /auth/login.

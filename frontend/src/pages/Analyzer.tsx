@@ -628,7 +628,7 @@ function HistorySidebar() {
 
 export default function Analyzer() {
   const store = useAnalyzerStore()
-  const model = 'gemini-2.5-flash'
+  const model = 'n8n agent'
   const [sampleIdx, setSampleIdx] = useState(0)
   const [splitPct, setSplitPct] = useState(50)  // left column width %
   const dragging = useRef(false)

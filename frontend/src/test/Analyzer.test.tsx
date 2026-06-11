@@ -28,5 +28,6 @@ test('shows URL input for problem analysis', () => {
 
 test('has analyze button', () => {
   render(<BrowserRouter><Analyzer /></BrowserRouter>)
-  expect(screen.getByRole('button', { name: /analyze/i })).toBeInTheDocument()
+  const buttons = screen.getAllByRole('button', { name: /analyze/i })
+  expect(buttons.some(button => !button.hasAttribute('disabled'))).toBe(true)
 })

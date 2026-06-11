@@ -1,0 +1,25 @@
+# Environment
+.env
+*.pem
+nginx/certs/
+
+# Go
+backend/server
+backend/migrate
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Obsidian
+**/.obsidian/workspace.json
+**/.obsidian/workspace-mobile.json
+**/.obsidian/cache

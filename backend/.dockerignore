@@ -1,0 +1,5 @@
+.env
+*.pem
+*_test.go
+Dockerfile
+.dockerignore
