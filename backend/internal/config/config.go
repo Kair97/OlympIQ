@@ -22,6 +22,10 @@ type Config struct {
 	N8NRoadmapURL     string
 	N8NRecommenderURL string
 
+	// Dify workflow analyzer (primary problem analyzer; falls back to n8n).
+	DifyAnalyzerURL string
+	DifyAnalyzerKey string
+
 	LeetCodeAPIURL     string
 	TaskRecommenderURL string
 }
@@ -43,6 +47,9 @@ func Load() *Config {
 		N8NAnalyzerURL:    os.Getenv("N8N_ANALYZER_URL"),
 		N8NRoadmapURL:     os.Getenv("N8N_ROADMAP_URL"),
 		N8NRecommenderURL: os.Getenv("N8N_RECOMMENDER_URL"),
+
+		DifyAnalyzerURL: getEnv("DIFY_ANALYZER_URL", "https://api.dify.ai/v1"),
+		DifyAnalyzerKey: os.Getenv("DIFY_ANALYZER_KEY"),
 
 		LeetCodeAPIURL:     getEnv("LEETCODE_API_URL", "http://leetcode-api:3000"),
 		TaskRecommenderURL: getEnv("TASK_RECOMMENDER_URL", "http://task-recommender:8000"),

@@ -78,7 +78,7 @@ func main() {
 	profileSvc := services.NewProfileService(userRepo, tokenRepo)
 	accountsSvc := services.NewAccountsService(platformRepo, redisCache, cfSvc, lcSvc)
 	statsSvc := services.NewStatsService(platformRepo, statsRepo, cfSvc, lcSvc)
-	aiSvc := services.NewAIService(cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.N8NRecommenderURL, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
+	aiSvc := services.NewAIService(cfg.N8NAnalyzerURL, cfg.N8NRoadmapURL, cfg.N8NRecommenderURL, cfg.DifyAnalyzerURL, cfg.DifyAnalyzerKey, platformRepo, statsRepo, goalsRepo, redisCache, cfSvc, lcSvc)
 	taskRecSvc := services.NewTaskRecommenderService(cfg.TaskRecommenderURL)
 	logger.Info("task-recommender configured", zap.String("url", cfg.TaskRecommenderURL))
 

@@ -45,6 +45,8 @@ type AIService struct {
 	n8nAnalyzerURL    string
 	n8nRoadmapURL     string
 	n8nRecommenderURL string
+	difyAnalyzerURL   string
+	difyAnalyzerKey   string
 	http              *http.Client
 	platforms         repository.PlatformRepository
 	stats             repository.StatsRepository
@@ -57,6 +59,7 @@ type AIService struct {
 // NewAIService constructs an AIService.
 func NewAIService(
 	n8nAnalyzerURL, n8nRoadmapURL, n8nRecommenderURL string,
+	difyAnalyzerURL, difyAnalyzerKey string,
 	platforms repository.PlatformRepository,
 	stats repository.StatsRepository,
 	goals repository.GoalsRepository,
@@ -68,6 +71,8 @@ func NewAIService(
 		n8nAnalyzerURL:    n8nAnalyzerURL,
 		n8nRoadmapURL:     n8nRoadmapURL,
 		n8nRecommenderURL: n8nRecommenderURL,
+		difyAnalyzerURL:   difyAnalyzerURL,
+		difyAnalyzerKey:   difyAnalyzerKey,
 		// n8n normally answers in 8-30s; 60s covers cold starts. Must stay well
 		// under the frontend nginx proxy_read_timeout (150s) even when the
 		// handler falls back to a second n8n call after a first timeout.
@@ -317,12 +322,83 @@ func (s *AIService) callN8NRoadmap(ctx context.Context, sc *StudentContext, mode
 	return cleaned, nil
 }
 
-// AnalyzeProblem analyzes a problem through the n8n analyzer workflow.
+// AnalyzeProblem analyzes a problem. It prefers the Dify workflow when configured
+// and falls back to the n8n analyzer workflow if Dify is not set up or fails.
 func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (string, error) {
+	if s.difyAnalyzerKey != "" {
+		result, err := s.callDifyAnalyzer(ctx, problemURL)
+		if err == nil && result != "" {
+			return result, nil
+		}
+		// Dify failed — fall through to n8n if available, otherwise surface the error.
+		if s.n8nAnalyzerURL == "" {
+			return "", err
+		}
+	}
 	if s.n8nAnalyzerURL == "" {
-		return "", fmt.Errorf("%w: N8N_ANALYZER_URL is not configured", ErrExternal)
+		return "", fmt.Errorf("%w: no analyzer configured (set DIFY_ANALYZER_KEY or N8N_ANALYZER_URL)", ErrExternal)
 	}
 	return s.callN8NAnalyzer(ctx, problemURL)
+}
+
+// callDifyAnalyzer runs the Dify "P_Analyzer" workflow app and returns the razbor JSON.
+// Dify workflow apps respond with { data: { status, outputs: { output: "<json string>" } } };
+// the analyzer schema inside outputs.output matches what parseAndNormalizeAnalysis expects.
+func (s *AIService) callDifyAnalyzer(ctx context.Context, problemURL string) (string, error) {
+	endpoint := strings.TrimRight(s.difyAnalyzerURL, "/") + "/workflows/run"
+
+	payload := map[string]interface{}{
+		"inputs":        map[string]string{"problem_url": sanitize(problemURL)},
+		"response_mode": "blocking",
+		"user":          "olympiq",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to build Dify request: %v", ErrExternal, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrExternal, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.difyAnalyzerKey)
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: Dify request failed: %v", ErrExternal, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to read Dify response: %v", ErrExternal, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%w: Dify returned status %d: %s", ErrExternal, resp.StatusCode, string(respBody))
+	}
+
+	var envelope struct {
+		Data struct {
+			Status  string `json:"status"`
+			Error   string `json:"error"`
+			Outputs struct {
+				Output string `json:"output"`
+			} `json:"outputs"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
+		return "", fmt.Errorf("%w: invalid Dify response: %v", ErrExternal, err)
+	}
+	if envelope.Data.Status != "succeeded" {
+		return "", fmt.Errorf("%w: Dify workflow %s: %s", ErrExternal, envelope.Data.Status, envelope.Data.Error)
+	}
+
+	cleaned := stripMarkdownFences(strings.TrimSpace(envelope.Data.Outputs.Output))
+	if cleaned == "" {
+		return "", fmt.Errorf("%w: Dify returned an empty analysis", ErrExternal)
+	}
+	return cleaned, nil
 }
 
 // callN8NAnalyzer sends the problem URL to the n8n analyzer webhook and returns the JSON razbor.
