@@ -187,7 +187,7 @@ function SampleProblemPane({ p, onAnalyze }: { p: SampleProblem; onAnalyze: () =
 
 // ── RazborPane ────────────────────────────────────────────────────────────────
 
-function RazborPane({ model }: { model: string }) {
+function RazborPane() {
   const {
     currentContent: r, analyzing, tab, revealedHints,
     setTab, setRevealedHints,
@@ -198,15 +198,12 @@ function RazborPane({ model }: { model: string }) {
       <div className="oq-razbor">
         <div className="oq-razbor-empty">
           <div className="oq-razbor-empty-glyph" style={{ animation: 'pulse 1.2s infinite' }}>✦</div>
-          <div className="oq-razbor-empty-title">Analyzing…</div>
+          <div className="oq-razbor-empty-title">Thinking…</div>
           <div className="oq-razbor-empty-sub">
-            AI is breaking down the problem — this takes 15–30 seconds.
+            Breaking down the problem — this takes 15–30 seconds.
           </div>
           <div className="oq-stream-cursor" style={{ marginTop: 12 }}>
             <span className="oq-cursor-block">▌</span>
-          </div>
-          <div className="oq-razbor-empty-meta oq-mono">
-            <div><span className="oq-dim">model</span>{"  "}{model}</div>
           </div>
         </div>
       </div>
@@ -225,7 +222,6 @@ function RazborPane({ model }: { model: string }) {
             complexity, and related problems.
           </div>
           <div className="oq-razbor-empty-meta oq-mono">
-            <div><span className="oq-dim">model</span>{"  "}{model}</div>
             <div><span className="oq-dim">supports</span>{"  "}codeforces · leetcode</div>
             <div><span className="oq-dim">no code</span>{"  "}you solve on the source platform</div>
           </div>
@@ -248,7 +244,7 @@ function RazborPane({ model }: { model: string }) {
         ))}
         <div className="oq-razbor-tab-spacer" />
         <span className="oq-razbor-status oq-mono">
-          <span className="oq-dot oq-dot-ok" /> done · {model}
+          <span className="oq-dot oq-dot-ok" /> done
         </span>
       </div>
 
@@ -628,7 +624,6 @@ function HistorySidebar() {
 
 export default function Analyzer() {
   const store = useAnalyzerStore()
-  const model = 'n8n agent'
   const [sampleIdx, setSampleIdx] = useState(0)
   const [splitPct, setSplitPct] = useState(50)  // left column width %
   const dragging = useRef(false)
@@ -821,7 +816,7 @@ export default function Analyzer() {
           className="oq-col oq-col-razbor"
           style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         >
-          <RazborPane model={model} />
+          <RazborPane />
         </div>
       </div>
 
