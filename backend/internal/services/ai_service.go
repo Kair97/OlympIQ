@@ -342,8 +342,9 @@ func (s *AIService) AnalyzeProblem(ctx context.Context, problemURL string) (stri
 }
 
 // callDifyAnalyzer runs the Dify "P_Analyzer" workflow app and returns the razbor JSON.
-// Dify workflow apps respond with { data: { status, outputs: { output: "<json string>" } } };
-// the analyzer schema inside outputs.output matches what parseAndNormalizeAnalysis expects.
+// Dify workflow apps respond with { data: { status, outputs: { <var>: <razbor> } } } where
+// the output variable name (e.g. "output" or "output_") and its value type (JSON string or
+// JSON object) depend on how the workflow was published — both shapes are handled below.
 func (s *AIService) callDifyAnalyzer(ctx context.Context, problemURL string) (string, error) {
 	endpoint := strings.TrimRight(s.difyAnalyzerURL, "/") + "/workflows/run"
 
@@ -380,11 +381,9 @@ func (s *AIService) callDifyAnalyzer(ctx context.Context, problemURL string) (st
 
 	var envelope struct {
 		Data struct {
-			Status  string `json:"status"`
-			Error   string `json:"error"`
-			Outputs struct {
-				Output string `json:"output"`
-			} `json:"outputs"`
+			Status  string                     `json:"status"`
+			Error   string                     `json:"error"`
+			Outputs map[string]json.RawMessage `json:"outputs"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(respBody, &envelope); err != nil {
@@ -394,7 +393,38 @@ func (s *AIService) callDifyAnalyzer(ctx context.Context, problemURL string) (st
 		return "", fmt.Errorf("%w: Dify workflow %s: %s", ErrExternal, envelope.Data.Status, envelope.Data.Error)
 	}
 
-	cleaned := stripMarkdownFences(strings.TrimSpace(envelope.Data.Outputs.Output))
+	// The workflow's output variable name varies between published versions
+	// (e.g. "output" or "output_"), and its value may be either a JSON string
+	// (stringified razbor) or a JSON object directly. Prefer known keys, then
+	// fall back to any single non-empty output, and handle both value shapes.
+	var raw json.RawMessage
+	for _, key := range []string{"output", "output_", "result", "text"} {
+		if v, ok := envelope.Data.Outputs[key]; ok && len(v) > 0 {
+			raw = v
+			break
+		}
+	}
+	if raw == nil {
+		for _, v := range envelope.Data.Outputs {
+			if len(v) > 0 {
+				raw = v
+				break
+			}
+		}
+	}
+	if raw == nil {
+		return "", fmt.Errorf("%w: Dify returned no output", ErrExternal)
+	}
+
+	cleaned := strings.TrimSpace(string(raw))
+	// If the value is a quoted JSON string, unquote it to get the inner JSON.
+	if strings.HasPrefix(cleaned, `"`) {
+		var unquoted string
+		if err := json.Unmarshal(raw, &unquoted); err == nil {
+			cleaned = unquoted
+		}
+	}
+	cleaned = stripMarkdownFences(strings.TrimSpace(cleaned))
 	if cleaned == "" {
 		return "", fmt.Errorf("%w: Dify returned an empty analysis", ErrExternal)
 	}
