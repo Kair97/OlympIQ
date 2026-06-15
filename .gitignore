@@ -10,10 +10,9 @@ ROADMAP_AGENT_PROMPT.txt
 n8n-agent-prompt.txt
 n8n-workflow-prompt.txt
 n8n-project-overview.txt
-_handoff_temp/_handoff/HANDOFF.md
-OlympIQ_vault/Brain/05-n8n-Agents.md
-OlympIQ_vault/Brain/10-Roadmap-Agent-Prompt.md
-OlympIQ_vault/Claude Prompts.md
+OlympIQ_vault/
+_handoff_temp/
+OlympIQ.zip
 
 # Go
 backend/server
